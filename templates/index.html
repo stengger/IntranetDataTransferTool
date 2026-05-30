@@ -265,28 +265,16 @@
 <script>
     let codeReader;
     try {
-        const hints = new Map();
         if (window.ZXing) {
-            const hintType = ZXing.DecodeHintType || {};
-            const barcodeFormat = ZXing.BarcodeFormat || {};
-            if (hintType.TRY_HARDER) hints.set(hintType.TRY_HARDER, true);
-            if (barcodeFormat.QR_CODE) hints.set(barcodeFormat.POSSIBLE_FORMATS, [barcodeFormat.QR_CODE]);
-            codeReader = new ZXing.BrowserQRCodeReader(hints);
+            // 直接采用无参构造函数实例化，依靠其内部最健壮的默认条码探测引擎进行高精度解码，彻底消除 hints 过滤错误导致的识别机制瘫痪
+            codeReader = new window.ZXing.BrowserQRCodeReader();
         } else {
             console.warn("ZXing 库未成功加载，本地解码功能将失效。");
             codeReader = null;
         }
     } catch (e) {
-        console.warn("ZXing hints 初始化失败，降级为默认无配置模式: ", e);
-        try {
-            if (window.ZXing) {
-                codeReader = new window.ZXing.BrowserQRCodeReader();
-            } else {
-                codeReader = null;
-            }
-        } catch (innerErr) {
-            codeReader = null;
-        }
+        console.warn("ZXing 初始化失败: ", e);
+        codeReader = null;
     }
     const resultText = document.getElementById('resultText');
     const logArea = document.getElementById('logArea');
@@ -962,6 +950,7 @@
             scanLoop();
         } catch (err) {
             log(`❌ 屏幕画面流构建异常: ${err.message}`, "error");
+            stopScreenScan();
         }
     }
 
@@ -992,8 +981,8 @@
             try {
                 scanCanvas.width = videoElement.videoWidth;
                 scanCanvas.height = videoElement.videoHeight;
-                // 开启 GPU 硬件加速的灰度化与对比度锐化滤镜，将抗锯齿像素过滤为高清晰二值化图像，解码率提升 300%
-                scanCtx.filter = "grayscale(100%) contrast(1.8) brightness(1.1)";
+                // 1. 第一通道：高精度高保真原图提取。避开过滤硬烧焦，依靠 ZXing 内部自适应混合二值化算法解密超高密度细节
+                scanCtx.filter = "none";
                 scanCtx.drawImage(videoElement, 0, 0, scanCanvas.width, scanCanvas.height);
 
                 // ---- 视频轨道挂起冻结检测 ----
@@ -1006,7 +995,7 @@
                 }
                 lastFrameCurrentTime = videoElement.currentTime;
 
-                // 连续 10 次（约 5 秒）视频播放进度未发生任何递增，判定视频轨道底层卡死
+                // 连续 10 次（约 5 秒）视频播放进度未发生 any 递增，判定视频轨道底层卡死
                 if (frozenFrameCount >= 10) {
                     log("🧊 检测到 WebRTC 视频轨道冻结（推流时间流逝停滞 5 秒），触发自动重连自愈...", "error");
                     frozenFrameCount = 0;
@@ -1024,7 +1013,20 @@
                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('decode_timeout')), 5000));
                 
                 try {
-                    const result = await Promise.race([decodePromise, timeoutPromise]);
+                    let result;
+                    try {
+                        result = await Promise.race([decodePromise, timeoutPromise]);
+                    } catch (primaryErr) {
+                        if (primaryErr.message === 'decode_timeout') {
+                            throw primaryErr; // 发生超时，直接向外抛出
+                        }
+                        // 2. 第二通道：原图解码未果时自适应自愈重试。开启 GPU 温和对比度增益及灰度滤镜重新截图再扫一次
+                        scanCtx.filter = "grayscale(100%) contrast(1.3) brightness(1.05)";
+                        scanCtx.drawImage(videoElement, 0, 0, scanCanvas.width, scanCanvas.height);
+                        const retryPromise = codeReader.decodeFromCanvas(scanCanvas);
+                        result = await Promise.race([retryPromise, timeoutPromise]);
+                    }
+                    
                     consecutiveTimeouts = 0; // 成功解码则重置超时计数器
                     
                     if (result && result.text) {

@@ -844,6 +844,7 @@
     let lastScannedText = ""; 
     let scanHeartbeat = 0;
     let lastWatchdogHeartbeat = -1;
+    let isDecoding = false; // 并发锁，防止多重 scanLoop 异步重叠
 
     // 冻结帧检测状态
     let lastFrameFingerprint = -1;
@@ -874,6 +875,7 @@
         log("🔄 正在尝试重新构建 WebRTC 视频流捕获通道...", "action");
         
         isScreenScanning = false;
+        isDecoding = false;
         if (screenStream) {
             screenStream.getTracks().forEach(track => track.stop());
             screenStream = null;
@@ -933,6 +935,7 @@
             btnScreenScan.innerText = "⏹️ 停止全自动扫描";
             btnScreenScan.classList.add("active");
             isScreenScanning = true;
+            isDecoding = false;
             lastScannedText = ""; 
             scanHeartbeat = 0;
             lastWatchdogHeartbeat = -1;
@@ -956,6 +959,7 @@
 
     function stopScreenScan() {
         isScreenScanning = false;
+        isDecoding = false;
         if (screenStream) {
             screenStream.getTracks().forEach(track => track.stop());
             screenStream = null;
@@ -972,7 +976,9 @@
 
     async function scanLoop() {
         if (!isScreenScanning) return;
+        if (isDecoding) return; // 二重并发守卫：如果前一帧的解码运算正在进行中，直接跳过本轮，绝不叠加并发
         
+        isDecoding = true;
         scanHeartbeat++;
         const indicator = scanHeartbeat % 2 === 0 ? "🔴 天眼画面监控中..." : "⭕ 天眼画面监控中...";
         document.getElementById('videoOverlay').innerText = indicator;
@@ -999,6 +1005,7 @@
                 if (frozenFrameCount >= 10) {
                     log("🧊 检测到 WebRTC 视频轨道冻结（推流时间流逝停滞 5 秒），触发自动重连自愈...", "error");
                     frozenFrameCount = 0;
+                    isDecoding = false; // 解除锁
                     rebootScreenScan();
                     return; 
                 }
@@ -1006,6 +1013,7 @@
                 // ---- ZXing 解码超时保护（5 秒超时） ----
                 if (!codeReader) {
                     log("⚠️ 解码器故障，终止天眼扫描。", "error");
+                    isDecoding = false; // 解除锁
                     stopScreenScan();
                     return;
                 }
@@ -1041,6 +1049,7 @@
                         log(`⚠️ ZXing 解码超时 (${consecutiveTimeouts}/3)`, 'warn');
                         if (consecutiveTimeouts >= 3) {
                             log("🚨 连续 3 次解码超时，触发自动重连...", "error");
+                            isDecoding = false; // 解除锁
                             rebootScreenScan();
                             consecutiveTimeouts = 0;
                             return;
@@ -1055,8 +1064,13 @@
             document.getElementById('videoOverlay').innerText = "⚠️ 等待视频画面重绘就绪...";
         }
         
-        // 每次等待 500ms（每秒捕获 2 次），平衡 CPU 与高频扫描，平滑流畅
-        setTimeout(scanLoop, 500);
+        // 这一轮的解码任务彻底、百分之百完结，解除并发锁定状态
+        isDecoding = false; 
+        
+        // 串行队列模式：只有当前轮完全解锁了，才安排 500ms 后的下一次扫描，保证绝对没有重叠！
+        if (isScreenScanning) {
+            setTimeout(scanLoop, 500);
+        }
     }
 </script>
 </body>

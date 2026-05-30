@@ -194,7 +194,7 @@
             <div style="position: relative; width: 100%;">
                 <!-- 文件接收舱室 (磨砂玻璃面板) -->
                 <div id="fileReceiverConsole" style="display: none; background: rgba(30, 41, 59, 0.65); border: 1px solid #334155; border-radius: 8px; padding: 26px; text-align: center; backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,0.4); margin-bottom: 16px;">
-                    <div style="font-size: 44px; margin-bottom: 12px; filter: drop-shadow(0 4px 10px rgba(99, 102, 241, 0.35));">📁</div>
+                    <div class="recv-icon" style="font-size: 44px; margin-bottom: 12px; filter: drop-shadow(0 4px 10px rgba(99, 102, 241, 0.35));">📁</div>
                     <div id="recvFileName" style="font-size: 16px; font-weight: 700; color: #f8fafc; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                         文件投递中...
                     </div>
@@ -263,10 +263,31 @@
 </div>
 
 <script>
-    const hints = new Map();
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE]);
-    const codeReader = new ZXing.BrowserQRCodeReader(hints);
+    let codeReader;
+    try {
+        const hints = new Map();
+        if (window.ZXing) {
+            const hintType = ZXing.DecodeHintType || {};
+            const barcodeFormat = ZXing.BarcodeFormat || {};
+            if (hintType.TRY_HARDER) hints.set(hintType.TRY_HARDER, true);
+            if (barcodeFormat.QR_CODE) hints.set(barcodeFormat.POSSIBLE_FORMATS, [barcodeFormat.QR_CODE]);
+            codeReader = new ZXing.BrowserQRCodeReader(hints);
+        } else {
+            console.warn("ZXing 库未成功加载，本地解码功能将失效。");
+            codeReader = null;
+        }
+    } catch (e) {
+        console.warn("ZXing hints 初始化失败，降级为默认无配置模式: ", e);
+        try {
+            if (window.ZXing) {
+                codeReader = new window.ZXing.BrowserQRCodeReader();
+            } else {
+                codeReader = null;
+            }
+        } catch (innerErr) {
+            codeReader = null;
+        }
+    }
     const resultText = document.getElementById('resultText');
     const logArea = document.getElementById('logArea');
     const btnToggle = document.getElementById('btnToggle');
@@ -466,13 +487,6 @@
 
             // 5. 缺失片段梳理
             let missingChunks = [];
-            for (let i = 1; i <= totalChunks; i++) {
-                if (puzzleChunks[i] === undefined) {
-                    missingChunks.push(i);
-                }
-            }
-
-            const missingChunks = [];
             for (let i = 1; i <= totalChunks; i++) {
                 if (puzzleChunks[i] === undefined) {
                     missingChunks.push(i);
@@ -784,6 +798,9 @@
             const img = new Image();
             img.onload = async () => {
                 try {
+                    if (!codeReader) {
+                        throw new Error("ZXing 解码引擎未就绪（请检查是否能够访问 unpkg.com CDN，或进行离线化部署）");
+                    }
                     const result = await codeReader.decodeFromImageElement(img);
                     resolve({ success: true, data: result.getText() });
                 } catch (err) { resolve({ success: false, data: "" }); } 
@@ -912,6 +929,11 @@
     }
 
     async function startScreenScan() {
+        if (!codeReader) {
+            log("❌ 无法开启全自动监控：ZXing 解码引擎未成功加载。请检查是否能够访问 unpkg.com CDN，或离线部署 ZXing 库。", "error");
+            alert("❌ 无法开启天眼全自动监控：\n因内网环境或网络限制导致前端解码库 (ZXing) 加载失败。请检查网络，或离线部署 index.html 的 CDN 依赖。");
+            return;
+        }
         try {
             screenStream = await navigator.mediaDevices.getDisplayMedia({ 
                 video: { displaySurface: "window" },
@@ -993,6 +1015,11 @@
                 }
 
                 // ---- ZXing 解码超时保护（5 秒超时） ----
+                if (!codeReader) {
+                    log("⚠️ 解码器故障，终止天眼扫描。", "error");
+                    stopScreenScan();
+                    return;
+                }
                 const decodePromise = codeReader.decodeFromCanvas(scanCanvas);
                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('decode_timeout')), 5000));
                 

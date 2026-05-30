@@ -787,12 +787,52 @@
             img.onload = async () => {
                 try {
                     if (!codeReader) {
-                        throw new Error("ZXing 解码引擎未就绪（请检查是否能够访问 unpkg.com CDN，或进行离线化部署）");
+                        throw new Error("ZXing 解码引擎未就绪");
                     }
-                    const result = await codeReader.decodeFromImageElement(img);
-                    resolve({ success: true, data: result.getText() });
-                } catch (err) { resolve({ success: false, data: "" }); } 
-                finally { URL.revokeObjectURL(url); }
+                    
+                    // 利用全局 scanCanvas 强制重新调整尺寸，彻底清空画布缓存与干扰灰度状态
+                    scanCanvas.width = img.naturalWidth || img.width;
+                    scanCanvas.height = img.naturalHeight || img.height;
+                    
+                    // 1. 第一通道：高精度高保真原画直接识别。不加任何像素插值滤镜，最大程度还原边缘
+                    scanCtx.filter = "none";
+                    scanCtx.drawImage(img, 0, 0, scanCanvas.width, scanCanvas.height);
+                    
+                    const decodePromise = codeReader.decodeFromCanvas(scanCanvas);
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('decode_timeout')), 5000));
+                    
+                    try {
+                        let result;
+                        try {
+                            result = await Promise.race([decodePromise, timeoutPromise]);
+                        } catch (primaryErr) {
+                            if (primaryErr.message === 'decode_timeout') throw primaryErr;
+                            
+                            // 2. 第二通道：原图识别失败时降级重试。注入 GPU 温和对比度锐化滤镜以突破高密度灰度粘连
+                            scanCtx.filter = "grayscale(100%) contrast(1.3) brightness(1.05)";
+                            scanCtx.drawImage(img, 0, 0, scanCanvas.width, scanCanvas.height);
+                            const retryPromise = codeReader.decodeFromCanvas(scanCanvas);
+                            result = await Promise.race([retryPromise, timeoutPromise]);
+                        }
+                        
+                        if (result && result.text) {
+                            resolve({ success: true, data: result.text });
+                        } else {
+                            resolve({ success: false, data: "" });
+                        }
+                    } catch (e) {
+                        resolve({ success: false, data: "" });
+                    }
+                } catch (err) {
+                    resolve({ success: false, data: "" });
+                } finally {
+                    URL.revokeObjectURL(url);
+                    // 每次解码完毕，强制重置 scanCtx 滤镜为 none 释放内存，并清除 canvas 像素
+                    try {
+                        scanCtx.filter = "none";
+                        scanCtx.clearRect(0, 0, scanCanvas.width, scanCanvas.height);
+                    } catch (e) {}
+                }
             };
             img.onerror = () => { URL.revokeObjectURL(url); resolve({ success: false, data: "" }); };
             img.src = url;
@@ -985,9 +1025,11 @@
 
         if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
             try {
-                scanCanvas.width = videoElement.videoWidth;
-                scanCanvas.height = videoElement.videoHeight;
-                // 1. 第一通道：高精度高保真原图提取。避开过滤硬烧焦，依靠 ZXing 内部自适应混合二值化算法解密超高密度细节
+                const w = videoElement.videoWidth || 640;
+                const h = videoElement.videoHeight || 480;
+                scanCanvas.width = w * 1.5;
+                scanCanvas.height = h * 1.5;
+                // 1. 第一通道：高精度高保真 1.5 倍硬件级双线性像素插值拉大图像。避开过滤硬烧焦，使二维码特征格像素面积增加 2.25 倍
                 scanCtx.filter = "none";
                 scanCtx.drawImage(videoElement, 0, 0, scanCanvas.width, scanCanvas.height);
 

@@ -782,56 +782,74 @@
     // ================== 本地图片文件导入解码通道 (ZXing 驱动) ==================
     function decodeLocalImage(file) {
         return new Promise((resolve) => {
+            console.log("[调试-通道C] 收到粘贴文件，开始构建动态 Image...", file.name, "大小:", file.size);
             const url = URL.createObjectURL(file);
             const img = new Image();
             img.onload = async () => {
+                console.log("[调试-通道C] 临时 Image 载入就绪，尺寸:", img.naturalWidth || img.width, "x", img.naturalHeight || img.height);
+                
+                // 动态构建完全隔离的离屏专用画布，彻底消除与通道B scanCanvas 的异步尺寸抢占冲突！
+                const localCanvas = document.createElement('canvas');
+                const localCtx = localCanvas.getContext('2d', { willReadFrequently: true });
+                
                 try {
                     if (!codeReader) {
+                        console.error("[调试-通道C] 致命错误: codeReader 未就绪！");
                         throw new Error("ZXing 解码引擎未就绪");
                     }
                     
-                    // 利用全局 scanCanvas 强制重新调整尺寸，彻底清空画布缓存与干扰灰度状态
-                    scanCanvas.width = img.naturalWidth || img.width;
-                    scanCanvas.height = img.naturalHeight || img.height;
+                    localCanvas.width = img.naturalWidth || img.width;
+                    localCanvas.height = img.naturalHeight || img.height;
                     
-                    // 1. 第一通道：高精度高保真原画直接识别。不加任何像素插值滤镜，最大程度还原边缘
-                    scanCtx.filter = "none";
-                    scanCtx.drawImage(img, 0, 0, scanCanvas.width, scanCanvas.height);
+                    // 1. 第一通道：高精度高保真原画直接识别
+                    localCtx.filter = "none";
+                    localCtx.drawImage(img, 0, 0, localCanvas.width, localCanvas.height);
+                    console.log("[调试-通道C] 第一通道绘制完成，启动 ZXing 解码...");
                     
-                    const decodePromise = codeReader.decodeFromCanvas(scanCanvas);
+                    const decodePromise = codeReader.decodeFromCanvas(localCanvas);
                     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('decode_timeout')), 5000));
                     
                     try {
                         let result;
                         try {
                             result = await Promise.race([decodePromise, timeoutPromise]);
+                            console.log("[调试-通道C] 第一通道解码成功！数据:", result.text);
                         } catch (primaryErr) {
-                            if (primaryErr.message === 'decode_timeout') throw primaryErr;
+                            if (primaryErr.message === 'decode_timeout') {
+                                console.warn("[调试-通道C] 第一通道解码超时！");
+                                throw primaryErr;
+                            }
+                            console.warn("[调试-通道C] 第一通道解码未成功，报错详情:", primaryErr);
                             
-                            // 2. 第二通道：原图识别失败时降级重试。注入 GPU 温和对比度锐化滤镜以突破高密度灰度粘连
-                            scanCtx.filter = "grayscale(100%) contrast(1.3) brightness(1.05)";
-                            scanCtx.drawImage(img, 0, 0, scanCanvas.width, scanCanvas.height);
-                            const retryPromise = codeReader.decodeFromCanvas(scanCanvas);
+                            // 2. 第二通道：温和灰度对比度锐化重试
+                            console.log("[调试-通道C] 启动第二通道（灰度对比度增强）重试...");
+                            localCtx.filter = "grayscale(100%) contrast(1.3) brightness(1.05)";
+                            localCtx.drawImage(img, 0, 0, localCanvas.width, localCanvas.height);
+                            
+                            const retryPromise = codeReader.decodeFromCanvas(localCanvas);
                             result = await Promise.race([retryPromise, timeoutPromise]);
+                            console.log("[调试-通道C] 第二通道重试成功！数据:", result.text);
                         }
                         
                         if (result && result.text) {
                             resolve({ success: true, data: result.text });
                         } else {
+                            console.error("[调试-通道C] 解码返回空 text");
                             resolve({ success: false, data: "" });
                         }
                     } catch (e) {
+                        console.error("[调试-通道C] 解码链路最终抛出异常:", e.message || e);
                         resolve({ success: false, data: "" });
                     }
                 } catch (err) {
+                    console.error("[调试-通道C] 外层异常:", err.message || err);
                     resolve({ success: false, data: "" });
                 } finally {
                     URL.revokeObjectURL(url);
-                    // 每次解码完毕，强制重置 scanCtx 滤镜为 none 释放内存，并清除 canvas 像素
-                    try {
-                        scanCtx.filter = "none";
-                        scanCtx.clearRect(0, 0, scanCanvas.width, scanCanvas.height);
-                    } catch (e) {}
+                    // 彻底释放画布内存
+                    localCanvas.width = 0;
+                    localCanvas.height = 0;
+                    console.log("[调试-通道C] 离屏 Canvas 已安全注销释放。");
                 }
             };
             img.onerror = () => { URL.revokeObjectURL(url); resolve({ success: false, data: "" }); };
@@ -1015,13 +1033,21 @@
     }
 
     async function scanLoop() {
-        if (!isScreenScanning) return;
-        if (isDecoding) return; // 二重并发守卫：如果前一帧的解码运算正在进行中，直接跳过本轮，绝不叠加并发
+        if (!isScreenScanning) {
+            console.log("[调试-通道B] 天眼监控已关闭，强行退出 scanLoop");
+            return;
+        }
+        if (isDecoding) {
+            console.warn("[调试-通道B] 警告: 前一帧解码中，本帧跳过。");
+            return; 
+        }
         
         isDecoding = true;
         scanHeartbeat++;
         const indicator = scanHeartbeat % 2 === 0 ? "🔴 天眼画面监控中..." : "⭕ 天眼画面监控中...";
         document.getElementById('videoOverlay').innerText = indicator;
+
+        console.log(`[调试-通道B] 唤醒第 ${scanHeartbeat} 次帧捕获... Video readyState:`, videoElement.readyState);
 
         if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
             try {
@@ -1029,23 +1055,23 @@
                 const h = videoElement.videoHeight || 480;
                 scanCanvas.width = w * 1.5;
                 scanCanvas.height = h * 1.5;
+                console.log(`[调试-通道B] 捕获画面成功。视频流尺寸: ${w}x${h}，Canvas 插值拉伸尺寸: ${scanCanvas.width}x${scanCanvas.height}`);
+
                 // 1. 第一通道：高精度高保真 1.5 倍硬件级双线性像素插值拉大图像。避开过滤硬烧焦，使二维码特征格像素面积增加 2.25 倍
                 scanCtx.filter = "none";
                 scanCtx.drawImage(videoElement, 0, 0, scanCanvas.width, scanCanvas.height);
 
                 // ---- 视频轨道挂起冻结检测 ----
-                // 利用播放器的 currentTime 在录制推流中必定不断递增的特性，
-                // 精准诊断出浏览器或系统底层的“轨道卡死/挂起”异常（彻底规避正常静止画面引起的重连误报）。
                 if (videoElement.currentTime === lastFrameCurrentTime) {
                     frozenFrameCount++;
                 } else {
                     frozenFrameCount = 0;
                 }
                 lastFrameCurrentTime = videoElement.currentTime;
+                console.log(`[调试-通道B] 视频帧当前播放时间: ${lastFrameCurrentTime}s，冻结帧计数: ${frozenFrameCount}`);
 
-                // 连续 10 次（约 5 秒）视频播放进度未发生 any 递增，判定视频轨道底层卡死
                 if (frozenFrameCount >= 10) {
-                    log("🧊 检测到 WebRTC 视频轨道冻结（推流时间流逝停滞 5 秒），触发自动重连自愈...", "error");
+                    console.error("[调试-通道B] 视频轨道严重冻结 5 秒！自动执行 rebootScreenScan 重连...");
                     frozenFrameCount = 0;
                     isDecoding = false; // 解除锁
                     rebootScreenScan();
@@ -1054,27 +1080,35 @@
 
                 // ---- ZXing 解码超时保护（5 秒超时） ----
                 if (!codeReader) {
-                    log("⚠️ 解码器故障，终止天眼扫描。", "error");
+                    console.error("[调试-通道B] 解码器故障，终止天眼扫描。");
                     isDecoding = false; // 解除锁
                     stopScreenScan();
                     return;
                 }
+                
                 const decodePromise = codeReader.decodeFromCanvas(scanCanvas);
                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('decode_timeout')), 5000));
                 
                 try {
                     let result;
                     try {
+                        console.log("[调试-通道B] 第一通道解码中...");
                         result = await Promise.race([decodePromise, timeoutPromise]);
+                        console.log("[调试-通道B] 第一通道解码成功！数据:", result.text);
                     } catch (primaryErr) {
                         if (primaryErr.message === 'decode_timeout') {
-                            throw primaryErr; // 发生超时，直接向外抛出
+                            console.warn("[调试-通道B] 第一通道解码超时！");
+                            throw primaryErr;
                         }
+                        console.warn("[调试-通道B] 第一通道解码未成功，报错详情:", primaryErr);
+                        
                         // 2. 第二通道：原图解码未果时自适应自愈重试。开启 GPU 温和对比度增益及灰度滤镜重新截图再扫一次
+                        console.log("[调试-通道B] 启动第二通道（灰度对比度增强）重试...");
                         scanCtx.filter = "grayscale(100%) contrast(1.3) brightness(1.05)";
                         scanCtx.drawImage(videoElement, 0, 0, scanCanvas.width, scanCanvas.height);
                         const retryPromise = codeReader.decodeFromCanvas(scanCanvas);
                         result = await Promise.race([retryPromise, timeoutPromise]);
+                        console.log("[调试-通道B] 第二通道重试成功！数据:", result.text);
                     }
                     
                     consecutiveTimeouts = 0; // 成功解码则重置超时计数器
@@ -1082,34 +1116,38 @@
                     if (result && result.text) {
                         if (result.text !== lastScannedText) {
                             lastScannedText = result.text;
+                            console.log("[调试-通道B] 成功识别出全新内容，送入数据拼合模块！");
                             processIncomingQRData(result.text, "天眼全自动捕获");
+                        } else {
+                            console.log("[调试-通道B] 识别内容与上一帧相同，已排重过滤。");
                         }
                     }
                 } catch (e) {
                     if (e.message === 'decode_timeout') {
                         consecutiveTimeouts++;
+                        console.error(`[调试-通道B] 连续 ZXing 超时次数: ${consecutiveTimeouts}/3`);
                         log(`⚠️ ZXing 解码超时 (${consecutiveTimeouts}/3)`, 'warn');
                         if (consecutiveTimeouts >= 3) {
-                            log("🚨 连续 3 次解码超时，触发自动重连...", "error");
+                            console.error("[调试-通道B] 连续 3 次解码超时，触发自动重连机制。");
                             isDecoding = false; // 解除锁
                             rebootScreenScan();
                             consecutiveTimeouts = 0;
                             return;
                         }
                     }
-                    // 未扫出条码，静默忽略
+                    console.log("[调试-通道B] 本帧未扫描出任何二维码图案。");
                 }
             } catch (e) {
-                // 绘制画面异常，静默忽略
+                console.error("[调试-通道B] scanLoop 内层异常:", e);
             }
         } else {
+            console.log("[调试-通道B] videoElement 尚未就绪 (readyState < HAVE_ENOUGH_DATA)");
             document.getElementById('videoOverlay').innerText = "⚠️ 等待视频画面重绘就绪...";
         }
         
-        // 这一轮的解码任务彻底、百分之百完结，解除并发锁定状态
         isDecoding = false; 
+        console.log("[调试-通道B] 解锁当前帧，准备 500ms 后调度下一帧。");
         
-        // 串行队列模式：只有当前轮完全解锁了，才安排 500ms 后的下一次扫描，保证绝对没有重叠！
         if (isScreenScanning) {
             setTimeout(scanLoop, 500);
         }

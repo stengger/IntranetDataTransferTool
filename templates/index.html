@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>内网数据传输工具 - 接收端</title>
+    <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px 20px; display: flex; flex-direction: column; align-items: center; margin: 0; min-height: 100vh; }
+        .container { background: #1e293b; padding: 35px; border-radius: 18px; box-shadow: 0 16px 48px rgba(0,0,0,0.6); width: 100%; max-width: 1200px; border: 1px solid #334155; transition: all 0.3s ease; }
+        
+        /* ===== 双舱主工作区 ===== */
+        .app-workspace {
+            display: flex;
+            gap: 24px;
+            width: 100%;
+            align-items: stretch;
+            margin-top: 15px;
+            transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        .left-cabin {
+            flex: 1.4;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+            min-width: 0;
+        }
+        .right-cabin {
+            flex: 1;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 14px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+            box-shadow: inset 0 4px 12px rgba(0,0,0,0.4);
+            min-width: 320px;
+            opacity: 1;
+            transform: scale(1);
+            transform-origin: right center;
+        }
+        
+        /* 折叠状态 */
+        .right-cabin.collapsed {
+            flex: 0;
+            min-width: 0;
+            width: 0;
+            padding: 0;
+            margin: 0;
+            border: none;
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.9);
+        }
+        
+        /* ===== 舱室物理分割线/折叠手柄 ===== */
+        .cabin-divider {
+            width: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            user-select: none;
+        }
+        .cabin-divider:hover .divider-handle {
+            background: #6366f1;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
+        }
+        .divider-handle {
+            width: 6px;
+            height: 80px;
+            background: #334155;
+            border-radius: 3px;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .divider-handle::before, .divider-handle::after {
+            content: "";
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #f8fafc;
+            border-radius: 50%;
+            left: 1px;
+        }
+        .divider-handle::before { top: 30px; }
+        .divider-handle::after { bottom: 30px; }
+        
+        .upload-area { border: 2px dashed #3b82f6; border-radius: 8px; padding: 20px; text-align: center; background: rgba(59, 130, 246, 0.04); cursor: pointer; transition: all 0.3s; margin-bottom: 20px; }
+        .upload-area:hover { background: rgba(59, 130, 246, 0.1); border-color: #60a5fa; }
+        .upload-area input { display: none; }
+        .upload-title { font-size: 15px; color: #93c5fd; font-weight: bold; margin-bottom: 5px; }
+
+        .instruction { position: relative; background: #0f172a; border-left: 5px solid #10b981; padding: 15px 20px; border-radius: 0 8px 8px 0; color: #e2e8f0; font-size: 14px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.3); }
+        kbd { background: #1e40af; color: white; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 15px; margin: 0 4px; border-bottom: 2px solid #1e3a8a; }
+        
+        .radar-box { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 10px; background: #1e293b; padding: 8px 15px; border-radius: 30px; border: 1px solid #334155; }
+        .radar-dot { width: 12px; height: 12px; border-radius: 50%; background: #94a3b8; transition: all 0.2s; }
+        .radar-text { font-size: 13px; color: #94a3b8; font-weight: bold; transition: all 0.2s; min-width: 80px; text-align: center; }
+
+        .header-box { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
+        h3 { font-size: 14px; color: #94a3b8; margin: 0; font-weight: bold; }
+        .btn-group { display: flex; gap: 8px; }
+        button { padding: 8px 14px; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; }
+        button:active { transform: scale(0.96); }
+        button:disabled { background: #334155 !important; color: #64748b; cursor: not-allowed; transform: none; box-shadow: none; }
+        
+        .btn-copy { background: linear-gradient(135deg, #10b981, #059669); } .btn-copy:hover { background: #059669; }
+        .btn-undo, .btn-redo { background: #334155; border: 1px solid #475569; color: #cbd5e1; } .btn-undo:hover, .btn-redo:hover { background: #475569; }
+        .btn-clear { background: #ef4444; } .btn-clear:hover { background: #dc2626; }
+        .btn-toggle { background: #f59e0b; } .btn-toggle:hover { background: #d97706; }
+        .btn-toggle.paused { background: #3b82f6; } .btn-toggle.paused:hover { background: #2563eb; }
+        
+        .btn-auto-scan { background: #8b5cf6; box-shadow: 0 4px 12px rgba(139,92,246,0.3); transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        .btn-auto-scan:hover { background: #7c3aed; transform: translateY(-1px); }
+        .btn-auto-scan.active { background: #ef4444 !important; box-shadow: 0 4px 12px rgba(239,68,68,0.4); animation: scanPulse 2s infinite; }
+        @keyframes scanPulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
+        
+        textarea { width: 100%; height: 320px; padding: 16px; border: 1px solid #475569; border-radius: 8px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 14px; box-sizing: border-box; background: #020617; color: #38bdf8; resize: vertical; line-height: 1.6; }
+        textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25); }
+        
+        .log-area { margin-top: 15px; font-size: 13px; max-height: 120px; overflow-y: auto; background: #020617; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+        .log-success { color: #4ade80; } .log-error { color: #f87171; } .log-warn { color: #fbbf24; } .log-action { color: #60a5fa; font-weight: bold; }
+
+        /* ===== 文件接收可视化插槽 ===== */
+        .slot-block {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            background: #020617;
+            border: 1px solid #334155;
+            font-size: 11px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .slot-block.filled {
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-color: #34d399;
+            color: white;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+        }
+        .slot-block.missing {
+            border-color: #f87171;
+            color: #f87171;
+            animation: flashMissing 2s infinite;
+        }
+        @keyframes flashMissing {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="margin-top: 0; color: #f8fafc; text-align: center; letter-spacing: 1px; background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 25px;">内网数据传输工具 - 接收端大融合主控台</h2>
+    
+    <div class="app-workspace">
+        <!-- 左舱：接收展示与数据舱 -->
+        <div class="left-cabin" id="leftCabin">
+            <div class="instruction">
+                <div>📡 <strong>后台监听已激活：</strong> 在任何外部窗口按 <kbd>F8</kbd> 自动全屏捕获并智能拼接。</div>
+                <div style="font-size: 13px; color: #94a3b8;">已拼合分块数: <span id="chunkCount" style="color: white; font-weight: bold;">0</span> 个</div>
+                
+                <div class="radar-box">
+                    <div id="radarDot" class="radar-dot"></div>
+                    <div id="radarText" class="radar-text">💤 待命连接中</div>
+                </div>
+            </div>
+
+            <label class="upload-area" id="dropZone">
+                <input type="file" id="fileInput" multiple accept="image/*">
+                <div class="upload-title">🔥 网页备用通道：焦点在此页面时，直接按 Ctrl+V 粘贴截图</div>
+                <div style="font-size: 13px; color: #94a3b8;">(也支持拖拽图片到此处，将自动使用网页端 ZXing 引擎高精度提取)</div>
+            </label>
+
+            <div class="header-box">
+                <h3 id="previewTitle">智能拼图结果实时预览：</h3>
+                <div class="btn-group">
+                    <button id="btnToggle" class="btn-toggle" onclick="toggleMonitoring()">⏸️ 暂停 F8 监听</button>
+                    <button class="btn-copy" onclick="copyAll()">📋 一键复制</button>
+                    <button id="btnUndo" class="btn-undo" onclick="undo()" disabled>↩️ 撤销</button>
+                    <button id="btnRedo" class="btn-redo" onclick="redo()" disabled>↪️ 重做</button>
+                    <button class="btn-clear" onclick="clearAll()">🗑️ 清空重置</button>
+                </div>
+            </div>
+            
+            <div style="position: relative; width: 100%;">
+                <!-- 文件接收舱室 (磨砂玻璃面板) -->
+                <div id="fileReceiverConsole" style="display: none; background: rgba(30, 41, 59, 0.65); border: 1px solid #334155; border-radius: 8px; padding: 26px; text-align: center; backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,0.4); margin-bottom: 16px;">
+                    <div style="font-size: 44px; margin-bottom: 12px; filter: drop-shadow(0 4px 10px rgba(99, 102, 241, 0.35));">📁</div>
+                    <div id="recvFileName" style="font-size: 16px; font-weight: 700; color: #f8fafc; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        文件投递中...
+                    </div>
+                    <div id="recvStatusText" style="font-size: 13px; color: #94a3b8; font-weight: 600; margin-bottom: 16px;">
+                        正在等待分片数据流注入...
+                    </div>
+                    
+                    <!-- 渐变流光进度条 -->
+                    <div style="background: #020617; border-radius: 8px; height: 10px; width: 100%; border: 1px solid #334155; overflow: hidden; margin-bottom: 22px; position: relative;">
+                        <div id="recvProgressBar" style="background: linear-gradient(90deg, #4f46e5, #6366f1, #34d399); width: 0%; height: 100%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);"></div>
+                    </div>
+                    
+                    <!-- 分片插槽物理方格矩阵 -->
+                    <div id="recvSlotsGrid" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 22px;"></div>
+                    
+                    <!-- 下载卡片按钮舱 -->
+                    <div id="downloadBtnContainer" style="display: none; animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                        <button id="btnDownloadFile" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; padding: 14px 28px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4); display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;" onclick="downloadTransferredFile()">
+                            📥 拼图集齐！一键无损还原下载
+                        </button>
+                    </div>
+                </div>
+                
+                <textarea id="resultText" placeholder="等待数据流注入..." readonly></textarea>
+            </div>
+            
+            <div class="log-area" id="logArea">
+                <div style="color: #94a3b8;">[系统] 智能拼图引擎就绪。支持高级拼图元数据协议，能自动识别并指出缺失分片。</div>
+            </div>
+        </div>
+        
+        <!-- 舱室物理分割线/折叠控制器 -->
+        <div class="cabin-divider" onclick="toggleRightCabin()" title="展开/收起天眼视频面板">
+            <div class="divider-handle"></div>
+        </div>
+        
+        <!-- 右舱：全自动天眼监控舱 -->
+        <div class="right-cabin" id="rightCabin">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="color: #818cf8; font-weight: 800; font-size: 14px; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px;">
+                    🎥 天眼全自动视频监控
+                </h3>
+            </div>
+            
+            <button id="btnScreenScan" class="btn-auto-scan" onclick="toggleScreenScan()" style="width: 100%; padding: 12px; border-radius: 6px; border: none; font-size: 13px; font-weight: 800; color: white; cursor: pointer; margin-bottom: 15px;">
+                🎥 开启屏幕全自动监控
+            </button>
+            
+            <!-- 视频实时预览窗 -->
+            <div id="videoContainer" class="video-container" style="display: none; flex-direction: column; align-items: center; background: #020617; border-radius: 8px; padding: 10px; box-sizing: border-box; position: relative; border: 1px solid #475569; width: 100%;">
+                <div class="video-overlay" id="videoOverlay" style="position: absolute; top: 15px; right: 15px; background: rgba(220, 38, 38, 0.9); color: white; padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: bold; display: flex; align-items: center; gap: 6px; z-index: 10;">
+                    🟢 天眼实时监控画面中...
+                </div>
+                <video id="screenVideo" autoplay muted playsinline style="width: 100%; max-height: 240px; border-radius: 4px; object-fit: contain;"></video>
+            </div>
+            
+            <!-- 天眼雷达说明 -->
+            <div class="right-cabin-info" style="font-size: 12px; color: #64748b; margin-top: 15px; line-height: 1.6; border-top: 1px solid #334155; padding-top: 15px;">
+                <div style="font-weight: 700; color: #94a3b8; margin-bottom: 5px;">🤖 天眼看门狗运行协议：</div>
+                • 开启监控后，天眼将高频（500ms）截获画面并解码。<br>
+                • <b>冻结帧侦测自愈</b>：视频画面静止 3 秒将自动重置轨道。<br>
+                • <b>解析超时看门狗</b>：连续 3 次解析超时将自动静默重启。
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const codeReader = new ZXing.BrowserQRCodeReader();
+    const resultText = document.getElementById('resultText');
+    const logArea = document.getElementById('logArea');
+    const btnToggle = document.getElementById('btnToggle');
+    const radarDot = document.getElementById('radarDot');
+    const radarText = document.getElementById('radarText');
+    const chunkCountDisplay = document.getElementById('chunkCount');
+    const previewTitle = document.getElementById('previewTitle');
+
+    // ================== 右舱折叠控制 ==================
+    let isRightPanelCollapsed = false;
+    function toggleRightCabin() {
+        const rightCabin = document.getElementById("rightCabin");
+        const dividerHandle = document.querySelector(".divider-handle");
+        
+        isRightPanelCollapsed = !isRightPanelCollapsed;
+        if (isRightPanelCollapsed) {
+            rightCabin.classList.add("collapsed");
+            dividerHandle.style.transform = "rotate(180deg)";
+        } else {
+            rightCabin.classList.remove("collapsed");
+            dividerHandle.style.transform = "none";
+        }
+    }
+
+    // ================== 听觉反馈系统 (Web Audio API) ==================
+    function playBeep(freq = 1200) {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
+            gainNode.gain.setValueAtTime(0.08, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+            osc.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.1);
+        } catch(e) {}
+    }
+
+    // ================== 智能拼图协议核心状态 ==================
+    let currentTaskId = "";
+    let puzzleChunks = {}; // 存放 chunkIndex -> decryptedText
+    let totalChunksCount = 0;
+    let currentFileTransferName = ""; // 正在传输的文件名
+
+    let globalMergedString = ""; // 兼容非协议普通二维码
+    let chunkCount = 0;
+    
+    let historyStack = [{ 
+        taskId: "", 
+        chunks: {}, 
+        total: 0, 
+        legacyText: "", 
+        count: 0,
+        fileName: ""
+    }];
+    let historyIndex = 0;
+
+    // ================== 雷达状态机 ==================
+    let radarTimer;
+    let isMonitoringPaused = false;
+
+    function setRadar(status) {
+        clearTimeout(radarTimer);
+        if (status === 'scanning') {
+            radarDot.style.background = '#3b82f6';
+            radarDot.style.boxShadow = '0 0 12px #3b82f6';
+            radarText.style.color = '#3b82f6';
+            radarText.innerText = '🔵 正在扫描...';
+        } else if (status === 'success') {
+            radarDot.style.background = '#10b981';
+            radarDot.style.boxShadow = '0 0 12px #10b981';
+            radarText.style.color = '#10b981';
+            radarText.innerText = '🟢 捕获成功';
+            autoResetRadar();
+        } else if (status === 'duplicate') {
+            radarDot.style.background = '#fbbf24';
+            radarDot.style.boxShadow = '0 0 12px #fbbf24';
+            radarText.style.color = '#fbbf24';
+            radarText.innerText = '🟡 重复画面';
+            autoResetRadar();
+        } else if (status === 'not_found') {
+            radarDot.style.background = '#94a3b8';
+            radarDot.style.boxShadow = 'none';
+            radarText.style.color = '#94a3b8';
+            radarText.innerText = '⚪ 未见二维码';
+            autoResetRadar();
+        } else if (status === 'paused') {
+            radarDot.style.background = '#f59e0b';
+            radarDot.style.boxShadow = 'none';
+            radarText.style.color = '#f59e0b';
+            radarText.innerText = '⏸️ 监听已暂停';
+        } else if (status === 'ready') {
+            if (isMonitoringPaused) return;
+            radarDot.style.background = '#10b981';
+            radarDot.style.boxShadow = 'none';
+            radarText.style.color = '#10b981';
+            radarText.innerText = '🟢 监控中';
+        }
+    }
+    
+    function autoResetRadar() {
+        radarTimer = setTimeout(() => { setRadar('ready'); }, 1500);
+    }
+    setRadar('ready');
+
+    // ================== 开启/暂停 F8 监听 ==================
+    function toggleMonitoring() {
+        fetch('/toggle', {method: 'POST'})
+        .then(res => res.json())
+        .then(data => {
+            if (data.state === 'active') {
+                isMonitoringPaused = false;
+                btnToggle.innerText = '⏸️ 暂停 F8 监听';
+                btnToggle.classList.remove('paused');
+                setRadar('ready');
+                log("▶️ 已恢复全局 F8 键盘截屏监听。", "action");
+            } else {
+                isMonitoringPaused = true;
+                btnToggle.innerText = '▶️ 恢复 F8 监听';
+                btnToggle.classList.add('paused');
+                setRadar('paused');
+                log("⏸️ 已暂停全局 F8 键盘截屏监听。", "warn");
+            }
+        });
+    }
+
+    // ================== 系统日志记录 ==================
+    function log(msg, type = 'normal') {
+        const p = document.createElement('div');
+        p.className = type === 'success' ? 'log-success' : (type === 'error' ? 'log-error' : (type === 'warn' ? 'log-warn' : (type === 'action' ? 'log-action' : '')));
+        const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+        p.innerText = `[${time}] ${msg}`;
+        logArea.appendChild(p);
+        logArea.scrollTop = logArea.scrollHeight; 
+    }
+
+    // ================== 核心：智能拼图数据流处理器 ==================
+    function processIncomingQRData(rawData, sourceName) {
+        // 自适应匹配协议正则 (支持文件传输)
+        const realMatch = rawData.match(/^\[CHUNK:(\d+)\|TOTAL:(\d+)\|HASH:([0-9a-fA-F]+)(?:\|FILE:([^\]]+))?\]([\s\S]*)$/);
+        
+        if (realMatch) {
+            const chunkIndex = parseInt(realMatch[1]);
+            const totalChunks = parseInt(realMatch[2]);
+            const taskId = realMatch[3];
+            const base64Filename = realMatch[4]; // 文件名 Base64
+            const base64Data = realMatch[5];
+
+            // 1. 检测是否开启了全新传输任务
+            if (taskId !== currentTaskId) {
+                currentTaskId = taskId;
+                puzzleChunks = {};
+                totalChunksCount = totalChunks;
+                
+                if (base64Filename) {
+                    try {
+                        currentFileTransferName = decodeURIComponent(escape(window.atob(base64Filename)));
+                    } catch (e) {
+                        currentFileTransferName = "unnamed_file";
+                    }
+                    log(`📁 检测到全新文件传输任务！(文件名: ${currentFileTransferName}, 任务ID: ${taskId})`, 'action');
+                } else {
+                    currentFileTransferName = "";
+                    log(`📝 检测到全新文本传输任务！(任务ID: ${taskId})`, 'action');
+                }
+            }
+
+            // 2. 检测该分片是否重复捕获
+            if (puzzleChunks[chunkIndex] !== undefined) {
+                setRadar('duplicate');
+                log(`⚠️ 分片 [${chunkIndex}/${totalChunks}] 之前已被捕获，已自动排重忽略。`, 'warn');
+                return;
+            }
+
+            // 3. 数据处理：如果是文件模式，保留原始 Base64 数据；如果是文本模式，解出明文
+            let decryptedChunk = "";
+            if (currentFileTransferName) {
+                decryptedChunk = base64Data; 
+            } else {
+                try {
+                    decryptedChunk = decodeURIComponent(escape(window.atob(base64Data)));
+                } catch (e) {
+                    decryptedChunk = base64Data;
+                }
+            }
+
+            // 4. 存入内存拼图卡槽中
+            puzzleChunks[chunkIndex] = decryptedChunk;
+            chunkCount = Object.keys(puzzleChunks).length;
+            setRadar('success');
+            playBeep(1800); // 捕获成功：高频滴声
+            log(`✅ 成功追加分片 [${chunkIndex}/${totalChunks}] (数据源: ${sourceName})`, 'success');
+
+            // 5. 缺失片段梳理
+            let missingChunks = [];
+            for (let i = 1; i <= totalChunks; i++) {
+                if (puzzleChunks[i] === undefined) {
+                    missingChunks.push(i);
+                }
+            }
+
+            if (currentFileTransferName) {
+                // 文件模式下的 UI 状态渲染
+                updateFileReceiverUI(currentFileTransferName, chunkCount, totalChunks, missingChunks);
+                previewTitle.innerText = `智能拼图预览 (当前收集: ${chunkCount}/${totalChunks})：`;
+                
+                if (missingChunks.length === 0) {
+                    log(`🎉 恭喜！文件 [${currentFileTransferName}] 已经 100% 集齐！已激活一键还原下载！`, 'success');
+                    previewTitle.innerHTML = `智能拼图预览 <span style="color: #4ade80;">(🎉 完美集齐 ${totalChunks}/${totalChunks})</span>：`;
+                } else {
+                    log(`⏳ 接收进度: ${chunkCount}/${totalChunks}，尚缺分片: [ ${missingChunks.join(', ')} ]。请在发送端补扫。`, 'warn');
+                }
+            } else {
+                // 传统文本模式 UI 渲染
+                document.getElementById("fileReceiverConsole").style.display = "none";
+                resultText.style.display = "block";
+                
+                let fullText = "";
+                for (let i = 1; i <= totalChunks; i++) {
+                    if (puzzleChunks[i] !== undefined) {
+                        fullText += puzzleChunks[i];
+                    } else {
+                        fullText += `[--- ⏳ 等待捕获第 ${i} 部分分片 ---]\n`;
+                    }
+                }
+                
+                resultText.value = fullText;
+                resultText.scrollTop = resultText.scrollHeight;
+                previewTitle.innerText = `智能拼图预览 (当前收集: ${chunkCount}/${totalChunks})：`;
+
+                if (missingChunks.length === 0) {
+                    log(`🎉 拼图完成！所有 ${totalChunks} 个分片已集齐无损合并。可直接一键复制带出！`, 'success');
+                    previewTitle.innerHTML = `智能拼图预览 <span style="color: #4ade80;">(🎉 已完美集齐 ${totalChunks}/${totalChunks})</span>：`;
+                } else {
+                    log(`⏳ 合并就绪度: ${chunkCount}/${totalChunks}，尚缺分片: [ ${missingChunks.join(', ')} ]。请在发送端补扫。`, 'warn');
+                }
+            }
+            saveState();
+        } else {
+            // 兼容非协议的常规二维码
+            document.getElementById("fileReceiverConsole").style.display = "none";
+            resultText.style.display = "block";
+            
+            let finalStr = rawData;
+            try {
+                finalStr = decodeURIComponent(escape(window.atob(rawData)));
+            } catch(e) {}
+            
+            globalMergedString += finalStr;
+            chunkCount++;
+            resultText.value = globalMergedString;
+            resultText.scrollTop = resultText.scrollHeight;
+            previewTitle.innerText = `数据追加预览 (共捕获: ${chunkCount}项)：`;
+            setRadar('success');
+            playBeep(1200); // 普通成功：稍低频滴声
+            log(`✅ 成功追加普通二维码数据 [${sourceName}]，提取 ${finalStr.length} 字符`, 'success');
+            saveState();
+        }
+    }
+
+    // ================== 文件模式专属：进度条与控制台面板更新 ==================
+    function updateFileReceiverUI(fileName, chunkCount, total, missingChunks) {
+        document.getElementById("fileReceiverConsole").style.display = "block";
+        resultText.style.display = "none";
+        
+        document.getElementById("recvFileName").innerText = `📁 正在接收文件: ${fileName}`;
+        document.getElementById("recvStatusText").innerText = `已收集分片: ${chunkCount} / ${total} (任务 ID: ${currentTaskId})`;
+        
+        const percent = Math.round((chunkCount / total) * 100);
+        document.getElementById("recvProgressBar").style.width = `${percent}%`;
+        
+        // 渲染可视化物理方格矩阵
+        const grid = document.getElementById("recvSlotsGrid");
+        grid.innerHTML = "";
+        for (let i = 1; i <= total; i++) {
+            const slot = document.createElement("div");
+            slot.className = "slot-block";
+            slot.innerText = i;
+            if (puzzleChunks[i] !== undefined) {
+                slot.classList.add("filled");
+            } else {
+                slot.classList.add("missing");
+            }
+            grid.appendChild(slot);
+        }
+        
+        // 当集齐时展现下载按钮
+        if (missingChunks.length === 0) {
+            document.getElementById("downloadBtnContainer").style.display = "block";
+        } else {
+            document.getElementById("downloadBtnContainer").style.display = "none";
+        }
+    }
+
+    // ================== 拼合二进制大串触发无损还原静默下载 ==================
+    function downloadTransferredFile() {
+        if (!currentTaskId || !currentFileTransferName) return;
+        
+        let fullBase64 = "";
+        for (let i = 1; i <= totalChunksCount; i++) {
+            if (puzzleChunks[i] !== undefined) {
+                fullBase64 += puzzleChunks[i];
+            } else {
+                alert("⚠️ 尚有缺失分片，无法还原文件！");
+                return;
+            }
+        }
+        
+        try {
+            const binaryString = window.atob(fullBase64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            const blob = new Blob([bytes], { type: "application/octet-stream" });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = currentFileTransferName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            log(`💾 文件 [${currentFileTransferName}] 拼合成功，已触发本地无损还原下载！`, 'success');
+        } catch (err) {
+            log(`❌ 文件流拼接还原异常: ${err.message}`, 'error');
+            alert(`❌ 还原文件失败: ${err.message}`);
+        }
+    }
+
+    // ================== 时光机回滚机制 ==================
+    const btnUndo = document.getElementById('btnUndo');
+    const btnRedo = document.getElementById('btnRedo');
+    
+    function updateButtonStates() {
+        btnUndo.disabled = historyIndex === 0;
+        btnRedo.disabled = historyIndex === historyStack.length - 1;
+        chunkCountDisplay.innerText = chunkCount;
+    }
+    
+    function saveState() {
+        if (historyIndex < historyStack.length - 1) historyStack.length = historyIndex + 1; 
+        
+        // 深拷贝当前的拼图状态以实现无损回退
+        historyStack.push({
+            taskId: currentTaskId,
+            chunks: { ...puzzleChunks },
+            total: totalChunksCount,
+            legacyText: globalMergedString,
+            count: chunkCount,
+            fileName: currentFileTransferName
+        });
+        historyIndex++;
+        updateButtonStates();
+    }
+    
+    function undo() { 
+        if (historyIndex > 0) { 
+            historyIndex--; 
+            restoreState(); 
+            log(`⏪ 撤销操作成功`, 'action'); 
+        } 
+    }
+    
+    function redo() { 
+        if (historyIndex < historyStack.length - 1) { 
+            historyIndex++; 
+            restoreState(); 
+            log(`⏩ 重做操作成功`, 'action'); 
+        } 
+    }
+    
+    function restoreState() {
+        const state = historyStack[historyIndex];
+        currentTaskId = state.taskId;
+        puzzleChunks = { ...state.chunks };
+        totalChunksCount = state.total;
+        globalMergedString = state.legacyText;
+        chunkCount = state.count;
+        currentFileTransferName = state.fileName || "";
+        
+        // 重塑 UI 展现
+        if (currentTaskId) {
+            if (currentFileTransferName) {
+                let missingChunks = [];
+                for (let i = 1; i <= totalChunksCount; i++) {
+                    if (puzzleChunks[i] === undefined) {
+                        missingChunks.push(i);
+                    }
+                }
+                updateFileReceiverUI(currentFileTransferName, chunkCount, totalChunksCount, missingChunks);
+                previewTitle.innerText = `智能拼图预览 (当前收集: ${chunkCount}/${totalChunksCount})：`;
+            } else {
+                document.getElementById("fileReceiverConsole").style.display = "none";
+                resultText.style.display = "block";
+                
+                let fullText = "";
+                for (let i = 1; i <= totalChunksCount; i++) {
+                    if (puzzleChunks[i] !== undefined) {
+                        fullText += puzzleChunks[i];
+                    } else {
+                        fullText += `[--- ⏳ 等待捕获第 ${i} 部分分片 ---]\n`;
+                    }
+                }
+                resultText.value = fullText;
+                previewTitle.innerText = `智能拼图预览 (当前收集: ${chunkCount}/${totalChunksCount})：`;
+            }
+        } else {
+            document.getElementById("fileReceiverConsole").style.display = "none";
+            resultText.style.display = "block";
+            resultText.value = globalMergedString;
+            previewTitle.innerText = `数据追加预览 (共捕获: ${chunkCount}项)：`;
+        }
+        
+        resultText.scrollTop = resultText.scrollHeight;
+        updateButtonStates();
+    }
+    
+    window.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); } 
+            else if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+        }
+    });
+
+    async function copyAll() {
+        if (currentFileTransferName) {
+            alert(`⚠️ 当前为文件传输模式，请直接点击“一键无损还原下载”进行保存。`);
+            return;
+        }
+        if (!resultText.value) return;
+        try {
+            await navigator.clipboard.writeText(resultText.value);
+            log(`📋 成功复制全部拼合文本到剪贴板！`, "action");
+            alert(`✅ 复制成功！共提取并整理了 ${resultText.value.length} 个字符。`);
+        } catch (err) {
+            resultText.select();
+            document.execCommand('copy');
+            window.getSelection().removeAllRanges();
+            log(`📋 成功复制全部拼合文本到剪贴板！`, "action");
+            alert(`✅ 复制成功！共提取并整理了 ${resultText.value.length} 个字符。`);
+        }
+    }
+
+    function clearAll() {
+        currentTaskId = "";
+        puzzleChunks = {};
+        totalChunksCount = 0;
+        currentFileTransferName = "";
+        globalMergedString = "";
+        chunkCount = 0;
+        historyStack = [{ taskId: "", chunks: {}, total: 0, legacyText: "", count: 0, fileName: "" }];
+        historyIndex = 0;
+        
+        resultText.value = "";
+        document.getElementById("fileReceiverConsole").style.display = "none";
+        resultText.style.display = "block";
+        
+        logArea.innerHTML = "";
+        previewTitle.innerText = "智能拼图预览：";
+        updateButtonStates();
+        fetch('/reset', {method: 'POST'}); 
+        log("🗑️ 数据传输流水线与合并缓存已彻底清空。");
+    }
+
+    // ================== 后端 SSE 接收流 ==================
+    const evtSource = new EventSource("/stream");
+    evtSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        if (data.status === "scanning") setRadar('scanning');
+        else if (data.status === "success") { 
+            processIncomingQRData(data.text, 'F8 全屏捕获'); 
+        }
+        else if (data.status === "duplicate") { 
+            setRadar('duplicate'); 
+            // 收到后端 F8 传来的重复数据，不发出 Beep 滴声，静默处理
+        }
+        else if (data.status === "not_found") { 
+            setRadar('not_found'); 
+        }
+        else { 
+            log(`❌ 后台异常: ${data.message}`, 'error'); 
+            setRadar('ready'); 
+        }
+    };
+
+    // ================== 本地图片文件导入解码通道 (ZXing 驱动) ==================
+    function decodeLocalImage(file) {
+        return new Promise((resolve) => {
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = async () => {
+                try {
+                    const result = await codeReader.decodeFromImageElement(img);
+                    resolve({ success: true, data: result.getText() });
+                } catch (err) { resolve({ success: false, data: "" }); } 
+                finally { URL.revokeObjectURL(url); }
+            };
+            img.onerror = () => { URL.revokeObjectURL(url); resolve({ success: false, data: "" }); };
+            img.src = url;
+        });
+    }
+
+    async function handleLocalImage(blob, sourceName) {
+        log(`📥 载入图片 [${sourceName}]，网页端 ZXing 解码引擎运算中...`);
+        const result = await decodeLocalImage(blob);
+        if (result.success) {
+            processIncomingQRData(result.data, sourceName);
+        } else {
+            playBeep(400); // 解析失败刺耳声
+            log(`❌ 解析失败 [${sourceName}]: 图像中未侦测到有效或高清晰度二维码`, 'error');
+            setRadar('not_found');
+        }
+    }
+
+    window.addEventListener('paste', async (e) => {
+        if(document.activeElement === resultText) resultText.blur();
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const blob = items[i].getAsFile();
+                handleLocalImage(blob, '粘贴板图片导入');
+            }
+        }
+    });
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(59, 130, 246, 0.15)'; });
+    dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(59, 130, 246, 0.04)'; });
+    dropZone.addEventListener('drop', async (e) => {
+        e.preventDefault(); dropZone.style.background = 'rgba(59, 130, 246, 0.04)';
+        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+        files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        for (let f of files) await handleLocalImage(f, f.name);
+    });
+    fileInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
+        files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        for (let f of files) await handleLocalImage(f, f.name);
+    });
+
+    // ================== 全自动天眼屏幕视频流监控 + 心跳看门狗 + 冻结帧自愈 ==================
+    let isScreenScanning = false;
+    let screenStream = null;
+    let lastScannedText = ""; 
+    let scanHeartbeat = 0;
+    let lastWatchdogHeartbeat = -1;
+
+    // 冻结帧检测状态
+    let lastFrameFingerprint = -1;
+    let frozenFrameCount = 0;
+
+    // ZXing 解码超时计数器
+    let consecutiveTimeouts = 0;
+
+    const videoElement = document.getElementById('screenVideo');
+    const videoContainer = document.getElementById('videoContainer');
+    const btnScreenScan = document.getElementById('btnScreenScan');
+    const scanCanvas = document.createElement('canvas');
+    const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+
+    // 看门狗心跳监测轮询（每 5 秒检测一次心跳状态，发现停滞立刻执行重连）
+    let watchdogTimer = setInterval(() => {
+        if (isScreenScanning) {
+            if (scanHeartbeat === lastWatchdogHeartbeat) {
+                log("🚨 检测到全自动天眼扫描卡死（WebRTC 视频轨道停滞或浏览器死锁）！激活看门狗重连...", "error");
+                rebootScreenScan();
+            }
+            lastWatchdogHeartbeat = scanHeartbeat;
+        }
+    }, 5000);
+
+    async function rebootScreenScan() {
+        log("🔄 正在尝试重新构建 WebRTC 视频流捕获通道...", "action");
+        
+        isScreenScanning = false;
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => track.stop());
+            screenStream = null;
+        }
+
+        lastFrameFingerprint = -1;
+        frozenFrameCount = 0;
+        consecutiveTimeouts = 0;
+        
+        // 500ms 延迟静默重建，防止资源未释放
+        setTimeout(async () => {
+            try {
+                screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: { displaySurface: "window" },
+                    audio: false 
+                });
+                
+                videoElement.srcObject = screenStream;
+                isScreenScanning = true;
+
+                // 轨道结束双重保险
+                screenStream.getVideoTracks()[0].onended = stopScreenScan;
+                screenStream.getVideoTracks()[0].oninactive = stopScreenScan;
+                
+                scanLoop();
+                log("🟢 天眼重连成功！屏幕全自动监控通道已重新挂载运行。", "success");
+            } catch (err) {
+                log(`❌ 天眼重连失败: ${err.message}。请尝试手动重新开启。`, "error");
+                stopScreenScan();
+            }
+        }, 500);
+    }
+
+    async function toggleScreenScan() {
+        if (isScreenScanning) {
+            stopScreenScan();
+        } else {
+            startScreenScan();
+        }
+    }
+
+    async function startScreenScan() {
+        try {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+                video: { displaySurface: "window" },
+                audio: false 
+            });
+            
+            videoElement.srcObject = screenStream;
+            videoContainer.style.display = "flex";
+            btnScreenScan.innerText = "⏹️ 停止全自动扫描";
+            btnScreenScan.classList.add("active");
+            isScreenScanning = true;
+            lastScannedText = ""; 
+            scanHeartbeat = 0;
+            lastWatchdogHeartbeat = -1;
+            lastFrameFingerprint = -1;
+            frozenFrameCount = 0;
+            consecutiveTimeouts = 0;
+            
+            log("📺 全自动屏幕监控扫描已开启！请拖动或开启发送端的全屏自动放映，使其处于录屏区域内。", "action");
+
+            // 轨道结束双重保险：同时监听 onended 和 oninactive
+            screenStream.getVideoTracks()[0].onended = stopScreenScan;
+            screenStream.getVideoTracks()[0].oninactive = stopScreenScan;
+
+            scanLoop();
+        } catch (err) {
+            log(`❌ 屏幕画面流构建异常: ${err.message}`, "error");
+        }
+    }
+
+    function stopScreenScan() {
+        isScreenScanning = false;
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => track.stop());
+            screenStream = null;
+        }
+        videoContainer.style.display = "none";
+        btnScreenScan.innerText = "🎥 开启屏幕全自动监控";
+        btnScreenScan.classList.remove("active");
+        lastFrameFingerprint = -1;
+        frozenFrameCount = 0;
+        consecutiveTimeouts = 0;
+        log("⏹️ 屏幕全自动监控扫描已停止。", "warn");
+    }
+
+    async function scanLoop() {
+        if (!isScreenScanning) return;
+        
+        scanHeartbeat++;
+        const indicator = scanHeartbeat % 2 === 0 ? "🔴 天眼画面监控中..." : "⭕ 天眼画面监控中...";
+        document.getElementById('videoOverlay').innerText = indicator;
+
+        if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+            try {
+                scanCanvas.width = videoElement.videoWidth;
+                scanCanvas.height = videoElement.videoHeight;
+                scanCtx.drawImage(videoElement, 0, 0, scanCanvas.width, scanCanvas.height);
+
+                // ---- Canvas 冻结帧检测 ----
+                const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+                let frameFingerprint = 0;
+                for (let i = 0; i < Math.min(4000, imageData.data.length); i += 40) {
+                    frameFingerprint = (frameFingerprint * 31 + imageData.data[i]) | 0;
+                }
+                if (frameFingerprint === lastFrameFingerprint) {
+                    frozenFrameCount++;
+                } else {
+                    frozenFrameCount = 0;
+                }
+                lastFrameFingerprint = frameFingerprint;
+
+                // 连续 6 帧（约 3 秒）像素完全一致，判定视频流冻结
+                if (frozenFrameCount >= 6) {
+                    log("🧊 检测到视频流画面冻结（连续 6 帧像素指纹相同），触发自动重连...", "error");
+                    frozenFrameCount = 0;
+                    rebootScreenScan();
+                    return; 
+                }
+
+                // ---- ZXing 解码超时保护（5 秒超时） ----
+                const decodePromise = codeReader.decodeFromCanvas(scanCanvas);
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('decode_timeout')), 5000));
+                
+                try {
+                    const result = await Promise.race([decodePromise, timeoutPromise]);
+                    consecutiveTimeouts = 0; // 成功解码则重置超时计数器
+                    
+                    if (result && result.text) {
+                        if (result.text !== lastScannedText) {
+                            lastScannedText = result.text;
+                            processIncomingQRData(result.text, "天眼全自动捕获");
+                        }
+                    }
+                } catch (e) {
+                    if (e.message === 'decode_timeout') {
+                        consecutiveTimeouts++;
+                        log(`⚠️ ZXing 解码超时 (${consecutiveTimeouts}/3)`, 'warn');
+                        if (consecutiveTimeouts >= 3) {
+                            log("🚨 连续 3 次解码超时，触发自动重连...", "error");
+                            rebootScreenScan();
+                            consecutiveTimeouts = 0;
+                            return;
+                        }
+                    }
+                    // 未扫出条码，静默忽略
+                }
+            } catch (e) {
+                // 绘制画面异常，静默忽略
+            }
+        } else {
+            document.getElementById('videoOverlay').innerText = "⚠️ 等待视频画面重绘就绪...";
+        }
+        
+        // 每次等待 500ms（每秒捕获 2 次），平衡 CPU 与高频扫描，平滑流畅
+        setTimeout(scanLoop, 500);
+    }
+</script>
+</body>
+</html>

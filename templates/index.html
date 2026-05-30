@@ -823,6 +823,7 @@
 
     // 冻结帧检测状态
     let lastFrameFingerprint = -1;
+    let lastFrameCurrentTime = -1;
     let frozenFrameCount = 0;
 
     // ZXing 解码超时计数器
@@ -855,6 +856,7 @@
         }
 
         lastFrameFingerprint = -1;
+        lastFrameCurrentTime = -1;
         frozenFrameCount = 0;
         consecutiveTimeouts = 0;
         
@@ -906,6 +908,7 @@
             scanHeartbeat = 0;
             lastWatchdogHeartbeat = -1;
             lastFrameFingerprint = -1;
+            lastFrameCurrentTime = -1;
             frozenFrameCount = 0;
             consecutiveTimeouts = 0;
             
@@ -931,6 +934,7 @@
         btnScreenScan.innerText = "🎥 开启屏幕全自动监控";
         btnScreenScan.classList.remove("active");
         lastFrameFingerprint = -1;
+        lastFrameCurrentTime = -1;
         frozenFrameCount = 0;
         consecutiveTimeouts = 0;
         log("⏹️ 屏幕全自动监控扫描已停止。", "warn");
@@ -949,22 +953,19 @@
                 scanCanvas.height = videoElement.videoHeight;
                 scanCtx.drawImage(videoElement, 0, 0, scanCanvas.width, scanCanvas.height);
 
-                // ---- Canvas 冻结帧检测 ----
-                const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
-                let frameFingerprint = 0;
-                for (let i = 0; i < Math.min(4000, imageData.data.length); i += 40) {
-                    frameFingerprint = (frameFingerprint * 31 + imageData.data[i]) | 0;
-                }
-                if (frameFingerprint === lastFrameFingerprint) {
+                // ---- 视频轨道挂起冻结检测 ----
+                // 利用播放器的 currentTime 在录制推流中必定不断递增的特性，
+                // 精准诊断出浏览器或系统底层的“轨道卡死/挂起”异常（彻底规避正常静止画面引起的重连误报）。
+                if (videoElement.currentTime === lastFrameCurrentTime) {
                     frozenFrameCount++;
                 } else {
                     frozenFrameCount = 0;
                 }
-                lastFrameFingerprint = frameFingerprint;
+                lastFrameCurrentTime = videoElement.currentTime;
 
-                // 连续 6 帧（约 3 秒）像素完全一致，判定视频流冻结
-                if (frozenFrameCount >= 6) {
-                    log("🧊 检测到视频流画面冻结（连续 6 帧像素指纹相同），触发自动重连...", "error");
+                // 连续 10 次（约 5 秒）视频播放进度未发生任何递增，判定视频轨道底层卡死
+                if (frozenFrameCount >= 10) {
+                    log("🧊 检测到 WebRTC 视频轨道冻结（推流时间流逝停滞 5 秒），触发自动重连自愈...", "error");
                     frozenFrameCount = 0;
                     rebootScreenScan();
                     return; 

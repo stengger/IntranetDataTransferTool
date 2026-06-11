@@ -79,6 +79,11 @@ def hotkey_listener():
 def index():
     return render_template('index.html')
 
+@app.route('/favicon.ico')
+def favicon():
+    """消除浏览器默认的 favicon.ico 404 请求噪声"""
+    return '', 204
+
 @app.route('/toggle', methods=['POST'])
 def toggle_monitoring():
     global monitoring_active
@@ -96,8 +101,12 @@ def reset_history():
 def stream():
     def event_stream():
         while True:
-            data = data_queue.get()
-            yield f"data: {json.dumps(data)}\n\n"
+            try:
+                # 15 秒超时：无数据时发送心跳 ping 防止 SSE 连接被浏览器/代理静默断开
+                data = data_queue.get(timeout=15)
+                yield f"data: {json.dumps(data)}\n\n"
+            except queue.Empty:
+                yield f"data: {json.dumps({'status': 'heartbeat'})}\n\n"
     return Response(event_stream(), mimetype="text/event-stream")
 
 if __name__ == '__main__':

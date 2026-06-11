@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <title>内网数据传输工具 - 接收端</title>
-    <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+    <!-- pako v2.1.0 本地化部署：解压发送端 zlib 压缩的数据，与 export.html 压缩侧对称 -->
+    <script src="/static/pako.min.js"></script>
+    <!-- jsQR v1.4.0 本地化部署：直接读 Canvas 像素，驱动粘贴截图和天眼视频监控通道 -->
+    <script src="/static/jsqr-1.4.0.js"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px 20px; display: flex; flex-direction: column; align-items: center; margin: 0; min-height: 100vh; }
         .container { background: #1e293b; padding: 35px; border-radius: 18px; box-shadow: 0 16px 48px rgba(0,0,0,0.6); width: 100%; max-width: 1200px; border: 1px solid #334155; transition: all 0.3s ease; }
@@ -154,12 +157,45 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
         }
+
+        /* ===== ZXing 加载失败警告条 ===== */
+        .zxing-warning-bar {
+            display: none;
+            background: linear-gradient(135deg, #92400e, #78350f);
+            border: 1px solid #f59e0b;
+            border-radius: 10px;
+            padding: 14px 20px;
+            margin-bottom: 18px;
+            color: #fef3c7;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.6;
+            box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2);
+            animation: slideDown 0.4s ease;
+        }
+        .zxing-warning-bar .warn-title {
+            font-size: 14px;
+            font-weight: 800;
+            color: #fbbf24;
+            margin-bottom: 6px;
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2 style="margin-top: 0; color: #f8fafc; text-align: center; letter-spacing: 1px; background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 25px;">内网数据传输工具 - 接收端大融合主控台</h2>
+
+    <!-- 前端解码引擎加载失败警告条（默认隐藏，JS 动态控制） -->
+    <div id="zxingWarningBar" class="zxing-warning-bar">
+        <div class="warn-title">⚠️ 前端解码引擎 (jsQR) 加载失败</div>
+        <div>粘贴截图 (Ctrl+V) 和天眼全自动视频监控功能 <b>不可用</b>。仅 <kbd>F8</kbd> 全局截屏捕获通道正常工作。</div>
+        <div style="margin-top: 6px; color: #fde68a;">排查方向: 检查 <code>/static/jsqr-1.4.0.js</code> 文件是否存在、Flask 是否正确托管 static 目录。</div>
+    </div>
     
     <div class="app-workspace">
         <!-- 左舱：接收展示与数据舱 -->
@@ -177,7 +213,7 @@
             <label class="upload-area" id="dropZone">
                 <input type="file" id="fileInput" multiple accept="image/*">
                 <div class="upload-title">🔥 网页备用通道：焦点在此页面时，直接按 Ctrl+V 粘贴截图</div>
-                <div style="font-size: 13px; color: #94a3b8;">(也支持拖拽图片到此处，将自动使用网页端 ZXing 引擎高精度提取)</div>
+                <div style="font-size: 13px; color: #94a3b8;">(也支持拖拽图片到此处，将自动使用 jsQR 引擎高精度提取)</div>
             </label>
 
             <div class="header-box">
@@ -263,18 +299,24 @@
 </div>
 
 <script>
-    let codeReader;
-    try {
-        if (window.ZXing) {
-            // 直接采用无参构造函数实例化，依靠其内部最健壮的默认条码探测引擎进行高精度解码，彻底消除 hints 过滤错误导致的识别机制瘫痪
-            codeReader = new window.ZXing.BrowserQRCodeReader();
-        } else {
-            console.warn("ZXing 库未成功加载，本地解码功能将失效。");
-            codeReader = null;
-        }
-    } catch (e) {
-        console.warn("ZXing 初始化失败: ", e);
-        codeReader = null;
+    // ==================== 解码引擎初始化 ====================
+    // jsQR 不需要实例化，直接调用全局 jsQR(data, width, height) 函数
+    const jsqrAvailable = typeof jsQR === 'function';
+    if (!jsqrAvailable) {
+        console.error('[诊断-引擎] ❌ jsQR 未加载！请检查 /static/jsqr-1.4.0.js 是否存在。');
+        document.getElementById('zxingWarningBar').style.display = 'block';
+    } else {
+        console.log('[诊断-引擎] ✅ jsQR 已就绪，粘贴和天眼通道可用。');
+    }
+
+    // ==================== 统一解码辅助函数：jsQR 直接读 Canvas 像素 ====================
+    // jsQR API: jsQR(Uint8ClampedArray imageData, width, height, {inversionAttempts})
+    // inversionAttempts: 'attemptBoth' 同时尝试正色和反色，覆盖暗底白码的场景
+    function decodeCanvasWithJsQR(canvas) {
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const result = jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+        return result ? result.data : null;
     }
     const resultText = document.getElementById('resultText');
     const logArea = document.getElementById('logArea');
@@ -320,6 +362,7 @@
 
     // ================== 智能拼图协议核心状态 ==================
     let currentTaskId = "";
+    let currentTaskCompressed = false; // 记录当前任务是否启用了 pako 压缩
     let puzzleChunks = {}; // 存放 chunkIndex -> decryptedText
     let totalChunksCount = 0;
     let currentFileTransferName = ""; // 正在传输的文件名
@@ -406,8 +449,13 @@
         });
     }
 
-    // ================== 系统日志记录 ==================
+    // ================== 系统日志记录（上限 200 条，防止 DOM 节点无限增长）==================
+    const LOG_MAX = 200;
     function log(msg, type = 'normal') {
+        // 超出上限时移除最旧的一条
+        if (logArea.children.length >= LOG_MAX) {
+            logArea.removeChild(logArea.firstChild);
+        }
         const p = document.createElement('div');
         p.className = type === 'success' ? 'log-success' : (type === 'error' ? 'log-error' : (type === 'warn' ? 'log-warn' : (type === 'action' ? 'log-action' : '')));
         const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
@@ -419,20 +467,23 @@
     // ================== 核心：智能拼图数据流处理器 ==================
     function processIncomingQRData(rawData, sourceName) {
         // 自适应匹配协议正则 (支持文件传输)
-        const realMatch = rawData.match(/^\[CHUNK:(\d+)\|TOTAL:(\d+)\|HASH:([0-9a-fA-F]+)(?:\|FILE:([^\]]+))?\]([\s\S]*)$/);
+        // 协议正则：支持可选 FILE 字段和 COMP:1 压缩标志（向下兼容旧数据）
+        const realMatch = rawData.match(/^\[CHUNK:(\d+)\|TOTAL:(\d+)\|HASH:([0-9a-fA-F]+)(?:\|FILE:([^\]|]+))?(?:\|COMP:(\d+))?\]([\s\S]*)$/);
         
         if (realMatch) {
             const chunkIndex = parseInt(realMatch[1]);
             const totalChunks = parseInt(realMatch[2]);
             const taskId = realMatch[3];
-            const base64Filename = realMatch[4]; // 文件名 Base64
-            const base64Data = realMatch[5];
+            const base64Filename = realMatch[4]; // 文件名 Base64（可选）
+            const isCompressed = realMatch[5] === '1'; // COMP:1 表示 pako zlib 压缩
+            const base64Data = realMatch[6];
 
             // 1. 检测是否开启了全新传输任务
             if (taskId !== currentTaskId) {
                 currentTaskId = taskId;
                 puzzleChunks = {};
                 totalChunksCount = totalChunks;
+                currentTaskCompressed = isCompressed; // 记录本任务是否使用了压缩
                 
                 if (base64Filename) {
                     try {
@@ -454,17 +505,9 @@
                 return;
             }
 
-            // 3. 数据处理：如果是文件模式，保留原始 Base64 数据；如果是文本模式，解出明文
-            let decryptedChunk = "";
-            if (currentFileTransferName) {
-                decryptedChunk = base64Data; 
-            } else {
-                try {
-                    decryptedChunk = decodeURIComponent(escape(window.atob(base64Data)));
-                } catch (e) {
-                    decryptedChunk = base64Data;
-                }
-            }
+            // 3. 数据处理：统一保留原始 base64 分片，等全部集齐后再统一解码/解压
+            //    （原因：压缩数据需要完整字节流才能解压，不能逐片解码）
+            const decryptedChunk = base64Data;
 
             // 4. 存入内存拼图卡槽中
             puzzleChunks[chunkIndex] = decryptedChunk;
@@ -487,29 +530,68 @@
             if (taskType === 'file') {
                 previewTitle.innerText = `智能拼图预览 (当前收集: ${chunkCount}/${totalChunks})：`;
                 if (missingChunks.length === 0) {
-                    log(`🎉 恭喜！文件 [${currentFileTransferName}] 已经 100% 集齐！已激活一键还原下载！`, 'success');
+                    const compNote = currentTaskCompressed ? '（含解压缩）' : '';
+                    log(`🎉 恭喜！文件 [${currentFileTransferName}] 已经 100% 集齐！已激活一键还原下载！${compNote}`, 'success');
                     previewTitle.innerHTML = `智能拼图预览 <span style="color: #4ade80;">(🎉 完美集齐 ${totalChunks}/${totalChunks})</span>：`;
+                    // 分片集齐后自动停止天眼监控，避免持续占用屏幕录制权限
+                    if (isScreenScanning) {
+                        stopScreenScan();
+                        log('🎥 天眼全自动监控已自动关闭（分片已全部集齐）。', 'success');
+                    }
                 } else {
                     log(`⏳ 接收进度: ${chunkCount}/${totalChunks}，尚缺分片: [ ${missingChunks.join(', ')} ]。请在发送端补扫。`, 'warn');
                 }
             } else {
-                // 传统文本模式 UI 渲染
+                // 文本模式 UI 渲染
+                // 拼接所有已收到的 base64 分片（缺失片用占位符）
+                let fullBase64 = "";
+                let hasAllChunks = missingChunks.length === 0;
                 let fullText = "";
-                for (let i = 1; i <= totalChunks; i++) {
-                    if (puzzleChunks[i] !== undefined) {
-                        fullText += puzzleChunks[i];
-                    } else {
-                        fullText += `[--- ⏳ 等待捕获第 ${i} 部分分片 ---]\n`;
+
+                if (hasAllChunks) {
+                    // 全部集齐：统一解码 base64 → 字节数组 → 若压缩则解压 → UTF-8 文本
+                    for (let i = 1; i <= totalChunks; i++) fullBase64 += puzzleChunks[i];
+                    try {
+                        // base64 → 二进制字节
+                        const binaryStr = window.atob(fullBase64);
+                        const bytes = new Uint8Array(binaryStr.length);
+                        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+                        // 若发送端启用了压缩，用 pako 解压
+                        const finalBytes = currentTaskCompressed ? pako.inflate(bytes) : bytes;
+                        fullText = new TextDecoder('utf-8').decode(finalBytes);
+                    } catch (e) {
+                        fullText = `[解码错误: ${e.message}]`;
+                        console.error('[接收端] 文本解码/解压失败:', e);
+                    }
+                } else {
+                    // 未集齐：显示已收到分片的预览（直接 base64 解码显示，供参考）
+                    for (let i = 1; i <= totalChunks; i++) {
+                        if (puzzleChunks[i] !== undefined) {
+                            try {
+                                const bStr = window.atob(puzzleChunks[i]);
+                                const bArr = new Uint8Array(bStr.length);
+                                for (let j = 0; j < bStr.length; j++) bArr[j] = bStr.charCodeAt(j);
+                                fullText += new TextDecoder('utf-8', {fatal: false}).decode(bArr);
+                            } catch(e) { fullText += puzzleChunks[i]; }
+                        } else {
+                            fullText += `[--- ⏳ 等待捕获第 ${i} 部分分片 ---]\n`;
+                        }
                     }
                 }
-                
+
                 resultText.value = fullText;
                 resultText.scrollTop = resultText.scrollHeight;
                 previewTitle.innerText = `智能拼图预览 (当前收集: ${chunkCount}/${totalChunks})：`;
 
-                if (missingChunks.length === 0) {
-                    log(`🎉 太棒了！文本已全部集齐，已实现无损智能还原！`, 'success');
+                if (hasAllChunks) {
+                    const compNote = currentTaskCompressed ? '（已自动解压缩）' : '';
+                    log(`🎉 太棒了！文本已全部集齐，已实现无损智能还原！${compNote}`, 'success');
                     previewTitle.innerHTML = `智能拼图预览 <span style="color: #4ade80;">(🎉 完美集齐 ${totalChunks}/${totalChunks})</span>：`;
+                    // 分片集齐后自动停止天眼监控
+                    if (isScreenScanning) {
+                        stopScreenScan();
+                        log('🎥 天眼全自动监控已自动关闭（分片已全部集齐）。', 'success');
+                    }
                 } else {
                     log(`⏳ 拼图进度: ${chunkCount}/${totalChunks}，缺漏分片: [ ${missingChunks.join(', ')} ]，请补扫。`, 'warn');
                 }
@@ -601,9 +683,20 @@
         try {
             const binaryString = window.atob(fullBase64);
             const len = binaryString.length;
-            const bytes = new Uint8Array(len);
+            let bytes = new Uint8Array(len);
             for (let i = 0; i < len; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            // 若发送端启用了压缩（COMP:1），用 pako 解压还原原始字节
+            if (currentTaskCompressed) {
+                try {
+                    bytes = pako.inflate(bytes);
+                    log(`📦 pako 解压完成，还原字节数: ${bytes.length}`, 'action');
+                } catch (inflateErr) {
+                    log(`❌ 解压失败: ${inflateErr.message}`, 'error');
+                    throw inflateErr;
+                }
             }
             
             const blob = new Blob([bytes], { type: "application/octet-stream" });
@@ -617,10 +710,12 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            log(`💾 文件 [${currentFileTransferName}] 拼合成功，已触发本地无损还原下载！`, 'success');
+            const compNote = currentTaskCompressed ? '（已解压缩）' : '';
+            log(`💾 文件 [${currentFileTransferName}] 拼合成功${compNote}，已触发本地无损还原下载！`, 'success');
         } catch (err) {
             log(`❌ 文件流拼接还原异常: ${err.message}`, 'error');
             alert(`❌ 还原文件失败: ${err.message}`);
+
         }
     }
 
@@ -762,6 +857,7 @@
     const evtSource = new EventSource("/stream");
     evtSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
+        if (data.status === "heartbeat") return; // 心跳保活信号，静默忽略
         if (data.status === "scanning") setRadar('scanning');
         else if (data.status === "success") { 
             processIncomingQRData(data.text, 'F8 全屏捕获'); 
@@ -778,87 +874,64 @@
             setRadar('ready'); 
         }
     };
+    evtSource.onerror = function() {
+        console.warn('[诊断-SSE] SSE 连接异常或断开，浏览器将自动重连...');
+    };
 
-    // ================== 本地图片文件导入解码通道 (ZXing 驱动) ==================
+    // ================== 本地图片文件导入解码通道（jsQR 驱动）==================
     function decodeLocalImage(file) {
         return new Promise((resolve) => {
-            console.log("[调试-通道C] 收到粘贴文件，开始构建动态 Image...", file.name, "大小:", file.size);
+            if (!jsqrAvailable) {
+                console.error('[调试-通道C] jsQR 未加载，无法解码。');
+                resolve({ success: false, data: '' });
+                return;
+            }
             const url = URL.createObjectURL(file);
             const img = new Image();
-            img.onload = async () => {
-                console.log("[调试-通道C] 临时 Image 载入就绪，尺寸:", img.naturalWidth || img.width, "x", img.naturalHeight || img.height);
-                
-                // 动态构建完全隔离的离屏专用画布，彻底消除与通道B scanCanvas 的异步尺寸抢占冲突！
-                const localCanvas = document.createElement('canvas');
-                const localCtx = localCanvas.getContext('2d', { willReadFrequently: true });
-                
-                try {
-                    if (!codeReader) {
-                        console.error("[调试-通道C] 致命错误: codeReader 未就绪！");
-                        throw new Error("ZXing 解码引擎未就绪");
-                    }
-                    
-                    localCanvas.width = img.naturalWidth || img.width;
-                    localCanvas.height = img.naturalHeight || img.height;
-                    
-                    // 1. 第一通道：高精度高保真原画直接识别
-                    localCtx.filter = "none";
-                    localCtx.drawImage(img, 0, 0, localCanvas.width, localCanvas.height);
-                    console.log("[调试-通道C] 第一通道绘制完成，启动 ZXing 解码...");
-                    
-                    const decodePromise = codeReader.decodeFromCanvas(localCanvas);
-                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('decode_timeout')), 5000));
-                    
-                    try {
-                        let result;
-                        try {
-                            result = await Promise.race([decodePromise, timeoutPromise]);
-                            console.log("[调试-通道C] 第一通道解码成功！数据:", result.text);
-                        } catch (primaryErr) {
-                            if (primaryErr.message === 'decode_timeout') {
-                                console.warn("[调试-通道C] 第一通道解码超时！");
-                                throw primaryErr;
-                            }
-                            console.warn("[调试-通道C] 第一通道解码未成功，报错详情:", primaryErr);
-                            
-                            // 2. 第二通道：温和灰度对比度锐化重试
-                            console.log("[调试-通道C] 启动第二通道（灰度对比度增强）重试...");
-                            localCtx.filter = "grayscale(100%) contrast(1.3) brightness(1.05)";
-                            localCtx.drawImage(img, 0, 0, localCanvas.width, localCanvas.height);
-                            
-                            const retryPromise = codeReader.decodeFromCanvas(localCanvas);
-                            result = await Promise.race([retryPromise, timeoutPromise]);
-                            console.log("[调试-通道C] 第二通道重试成功！数据:", result.text);
-                        }
-                        
-                        if (result && result.text) {
-                            resolve({ success: true, data: result.text });
-                        } else {
-                            console.error("[调试-通道C] 解码返回空 text");
-                            resolve({ success: false, data: "" });
-                        }
-                    } catch (e) {
-                        console.error("[调试-通道C] 解码链路最终抛出异常:", e.message || e);
-                        resolve({ success: false, data: "" });
-                    }
-                } catch (err) {
-                    console.error("[调试-通道C] 外层异常:", err.message || err);
-                    resolve({ success: false, data: "" });
-                } finally {
-                    URL.revokeObjectURL(url);
-                    // 彻底释放画布内存
-                    localCanvas.width = 0;
-                    localCanvas.height = 0;
-                    console.log("[调试-通道C] 离屏 Canvas 已安全注销释放。");
+            img.onload = () => {
+                const w = img.naturalWidth || img.width;
+                const h = img.naturalHeight || img.height;
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+                // --- 第一通道：原图直接识别 ---
+                canvas.width = w;
+                canvas.height = h;
+                ctx.filter = 'none';
+                ctx.drawImage(img, 0, 0, w, h);
+                let data = decodeCanvasWithJsQR(canvas);
+
+                // --- 第二通道：灰度+对比度增强 ---
+                if (!data) {
+                    ctx.filter = 'grayscale(100%) contrast(1.5) brightness(1.1)';
+                    ctx.drawImage(img, 0, 0, w, h);
+                    data = decodeCanvasWithJsQR(canvas);
                 }
+
+                // --- 第三通道：2× 超分放大，提升细粒度识别 ---
+                if (!data) {
+                    canvas.width = w * 2;
+                    canvas.height = h * 2;
+                    ctx.filter = 'none';
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    data = decodeCanvasWithJsQR(canvas);
+                }
+
+                URL.revokeObjectURL(url);
+                canvas.width = 0; canvas.height = 0;
+                resolve(data ? { success: true, data } : { success: false, data: '' });
             };
-            img.onerror = () => { URL.revokeObjectURL(url); resolve({ success: false, data: "" }); };
+            img.onerror = () => { URL.revokeObjectURL(url); resolve({ success: false, data: '' }); };
             img.src = url;
         });
     }
 
     async function handleLocalImage(blob, sourceName) {
-        log(`📥 载入图片 [${sourceName}]，网页端 ZXing 解码引擎运算中...`);
+        if (!jsqrAvailable) {
+            log(`❌ 解码失败 [${sourceName}]: jsQR 引擎未加载，请检查 /static/jsqr-1.4.0.js 是否存在。`, 'error');
+            return;
+        }
+        log(`📥 载入图片 [${sourceName}]，jsQR 解码引擎运算中...`);
         const result = await decodeLocalImage(blob);
         if (result.success) {
             processIncomingQRData(result.data, sourceName);
@@ -871,19 +944,34 @@
 
     window.addEventListener('paste', async (e) => {
         if(document.activeElement === resultText) resultText.blur();
-        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        const clipboardData = e.clipboardData || e.originalEvent.clipboardData;
+        if (!clipboardData) {
+            console.error('[诊断-粘贴] 无法获取剪贴板数据对象');
+            return;
+        }
+        const items = clipboardData.items;
+        let foundImage = false;
         for (let i = 0; i < items.length; i++) {
+            console.log(`[诊断-粘贴] 项目 ${i}: type=${items[i].type}, kind=${items[i].kind}`);
             if (items[i].type.indexOf('image') !== -1) {
+                foundImage = true;
                 const blob = items[i].getAsFile();
-                handleLocalImage(blob, '粘贴板图片导入');
+                console.log(`[诊断-粘贴] 提取到图片 Blob, 大小: ${blob ? blob.size : 'null'} bytes`);
+                if (blob) {
+                    handleLocalImage(blob, '粘贴板图片导入');
+                }
+                break; // 找到第一张图片即退出，防止增备用多个剪贴板项时重复解码
             }
+        }
+        if (!foundImage) {
+            console.log('[诊断-粘贴] 剪贴板中未发现图片类型数据');
         }
     });
 
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(59, 130, 246, 0.15)'; });
-    dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(59, 130, 246, 0.04)'; });
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(59, 130, 246, 0.15)'; dropZone.style.borderColor = '#38bdf8'; });
+    dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(59, 130, 246, 0.04)'; dropZone.style.borderColor = ''; });
     dropZone.addEventListener('drop', async (e) => {
         e.preventDefault(); dropZone.style.background = 'rgba(59, 130, 246, 0.04)';
         const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
@@ -899,7 +987,7 @@
     // ================== 全自动天眼屏幕视频流监控 + 心跳看门狗 + 冻结帧自愈 ==================
     let isScreenScanning = false;
     let screenStream = null;
-    let lastScannedText = ""; 
+    let lastScannedText = "";
     let scanHeartbeat = 0;
     let lastWatchdogHeartbeat = -1;
     let isDecoding = false; // 并发锁，防止多重 scanLoop 异步重叠
@@ -908,9 +996,6 @@
     let lastFrameFingerprint = -1;
     let lastFrameCurrentTime = -1;
     let frozenFrameCount = 0;
-
-    // ZXing 解码超时计数器
-    let consecutiveTimeouts = 0;
 
     const videoElement = document.getElementById('screenVideo');
     const videoContainer = document.getElementById('videoContainer');
@@ -942,7 +1027,6 @@
         lastFrameFingerprint = -1;
         lastFrameCurrentTime = -1;
         frozenFrameCount = 0;
-        consecutiveTimeouts = 0;
         
         // 500ms 延迟静默重建，防止资源未释放
         setTimeout(async () => {
@@ -977,9 +1061,12 @@
     }
 
     async function startScreenScan() {
-        if (!codeReader) {
-            log("❌ 无法开启全自动监控：ZXing 解码引擎未成功加载。请检查是否能够访问 unpkg.com CDN，或离线部署 ZXing 库。", "error");
-            alert("❌ 无法开启天眼全自动监控：\n因内网环境或网络限制导致前端解码库 (ZXing) 加载失败。请检查网络，或离线部署 index.html 的 CDN 依赖。");
+        console.log('[诊断-天眼] 尝试启动天眼全自动监控...');
+        console.log('[诊断-天眼] jsQR 可用?', jsqrAvailable);
+        console.log('[诊断-天眼] navigator.mediaDevices 可用?', !!navigator.mediaDevices);
+        console.log('[诊断-天眼] getDisplayMedia 可用?', !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia));
+        if (!jsqrAvailable) {
+            log('❌ 无法开启全自动监控：jsQR 解码引擎未成功加载。请检查 /static/jsqr-1.4.0.js 文件是否存在。', 'error');
             return;
         }
         try {
@@ -1000,7 +1087,6 @@
             lastFrameFingerprint = -1;
             lastFrameCurrentTime = -1;
             frozenFrameCount = 0;
-            consecutiveTimeouts = 0;
             
             log("📺 全自动屏幕监控扫描已开启！请拖动或开启发送端的全屏自动放映，使其处于录屏区域内。", "action");
 
@@ -1028,7 +1114,6 @@
         lastFrameFingerprint = -1;
         lastFrameCurrentTime = -1;
         frozenFrameCount = 0;
-        consecutiveTimeouts = 0;
         log("⏹️ 屏幕全自动监控扫描已停止。", "warn");
     }
 
@@ -1047,7 +1132,6 @@
         const indicator = scanHeartbeat % 2 === 0 ? "🔴 天眼画面监控中..." : "⭕ 天眼画面监控中...";
         document.getElementById('videoOverlay').innerText = indicator;
 
-        console.log(`[调试-通道B] 唤醒第 ${scanHeartbeat} 次帧捕获... Video readyState:`, videoElement.readyState);
 
         if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
             try {
@@ -1055,7 +1139,6 @@
                 const h = videoElement.videoHeight || 480;
                 scanCanvas.width = w * 1.5;
                 scanCanvas.height = h * 1.5;
-                console.log(`[调试-通道B] 捕获画面成功。视频流尺寸: ${w}x${h}，Canvas 插值拉伸尺寸: ${scanCanvas.width}x${scanCanvas.height}`);
 
                 // 1. 第一通道：高精度高保真 1.5 倍硬件级双线性像素插值拉大图像。避开过滤硬烧焦，使二维码特征格像素面积增加 2.25 倍
                 scanCtx.filter = "none";
@@ -1068,7 +1151,6 @@
                     frozenFrameCount = 0;
                 }
                 lastFrameCurrentTime = videoElement.currentTime;
-                console.log(`[调试-通道B] 视频帧当前播放时间: ${lastFrameCurrentTime}s，冻结帧计数: ${frozenFrameCount}`);
 
                 if (frozenFrameCount >= 10) {
                     console.error("[调试-通道B] 视频轨道严重冻结 5 秒！自动执行 rebootScreenScan 重连...");
@@ -1078,64 +1160,30 @@
                     return; 
                 }
 
-                // ---- ZXing 解码超时保护（5 秒超时） ----
-                if (!codeReader) {
-                    console.error("[调试-通道B] 解码器故障，终止天眼扫描。");
-                    isDecoding = false; // 解除锁
+                // ---- jsQR 解码（同步，直接读 Canvas 像素，无需 Promise/超时保护）----
+                if (!jsqrAvailable) {
+                    console.error('[调试-通道B] jsQR 未加载，终止天眼扫描。');
+                    isDecoding = false;
                     stopScreenScan();
                     return;
                 }
-                
-                const decodePromise = codeReader.decodeFromCanvas(scanCanvas);
-                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('decode_timeout')), 5000));
-                
-                try {
-                    let result;
-                    try {
-                        console.log("[调试-通道B] 第一通道解码中...");
-                        result = await Promise.race([decodePromise, timeoutPromise]);
-                        console.log("[调试-通道B] 第一通道解码成功！数据:", result.text);
-                    } catch (primaryErr) {
-                        if (primaryErr.message === 'decode_timeout') {
-                            console.warn("[调试-通道B] 第一通道解码超时！");
-                            throw primaryErr;
-                        }
-                        console.warn("[调试-通道B] 第一通道解码未成功，报错详情:", primaryErr);
-                        
-                        // 2. 第二通道：原图解码未果时自适应自愈重试。开启 GPU 温和对比度增益及灰度滤镜重新截图再扫一次
-                        console.log("[调试-通道B] 启动第二通道（灰度对比度增强）重试...");
-                        scanCtx.filter = "grayscale(100%) contrast(1.3) brightness(1.05)";
-                        scanCtx.drawImage(videoElement, 0, 0, scanCanvas.width, scanCanvas.height);
-                        const retryPromise = codeReader.decodeFromCanvas(scanCanvas);
-                        result = await Promise.race([retryPromise, timeoutPromise]);
-                        console.log("[调试-通道B] 第二通道重试成功！数据:", result.text);
+                // 第一通道：原图直接解码
+                let decodedText = decodeCanvasWithJsQR(scanCanvas);
+
+                // 第二通道：灰度+对比度增强
+                if (!decodedText) {
+                    scanCtx.filter = 'grayscale(100%) contrast(1.5) brightness(1.1)';
+                    scanCtx.drawImage(videoElement, 0, 0, scanCanvas.width, scanCanvas.height);
+                    decodedText = decodeCanvasWithJsQR(scanCanvas);
+                }
+
+
+                if (decodedText) {
+                    if (decodedText !== lastScannedText) {
+                        lastScannedText = decodedText;
+                        processIncomingQRData(decodedText, '天眼全自动捕获');
                     }
-                    
-                    consecutiveTimeouts = 0; // 成功解码则重置超时计数器
-                    
-                    if (result && result.text) {
-                        if (result.text !== lastScannedText) {
-                            lastScannedText = result.text;
-                            console.log("[调试-通道B] 成功识别出全新内容，送入数据拼合模块！");
-                            processIncomingQRData(result.text, "天眼全自动捕获");
-                        } else {
-                            console.log("[调试-通道B] 识别内容与上一帧相同，已排重过滤。");
-                        }
-                    }
-                } catch (e) {
-                    if (e.message === 'decode_timeout') {
-                        consecutiveTimeouts++;
-                        console.error(`[调试-通道B] 连续 ZXing 超时次数: ${consecutiveTimeouts}/3`);
-                        log(`⚠️ ZXing 解码超时 (${consecutiveTimeouts}/3)`, 'warn');
-                        if (consecutiveTimeouts >= 3) {
-                            console.error("[调试-通道B] 连续 3 次解码超时，触发自动重连机制。");
-                            isDecoding = false; // 解除锁
-                            rebootScreenScan();
-                            consecutiveTimeouts = 0;
-                            return;
-                        }
-                    }
-                    console.log("[调试-通道B] 本帧未扫描出任何二维码图案。");
+                    // 重复画面时不触发雷达闪烁，减少天眼运行时视觉噪声
                 }
             } catch (e) {
                 console.error("[调试-通道B] scanLoop 内层异常:", e);
@@ -1146,7 +1194,6 @@
         }
         
         isDecoding = false; 
-        console.log("[调试-通道B] 解锁当前帧，准备 500ms 后调度下一帧。");
         
         if (isScreenScanning) {
             setTimeout(scanLoop, 500);
@@ -1155,3 +1202,4 @@
 </script>
 </body>
 </html>
+

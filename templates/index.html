@@ -5,195 +5,702 @@
     <title>内网数据传输工具 - 接收端</title>
     <!-- pako v2.1.0 本地化部署：解压发送端 zlib 压缩的数据，与 export.html 压缩侧对称 -->
     <script src="/static/pako.min.js"></script>
-    <!-- jsQR v1.4.0 本地化部署：直接读 Canvas 像素，驱动粘贴截图和天眼视频监控通道 -->
+    <!-- jsQR v1.4.0 本地化部署：直接读 Canvas 像素，驱动粘贴截图和屏幕扫描通道 -->
     <script src="/static/jsqr-1.4.0.js"></script>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px 20px; display: flex; flex-direction: column; align-items: center; margin: 0; min-height: 100vh; }
-        .container { background: #1e293b; padding: 35px; border-radius: 18px; box-shadow: 0 16px 48px rgba(0,0,0,0.6); width: 100%; max-width: 1200px; border: 1px solid #334155; transition: all 0.3s ease; }
-        
-        /* ===== 双舱主工作区 ===== */
+        :root {
+            --bg: #07111f;
+            --panel: rgba(15, 23, 42, 0.82);
+            --panel-strong: rgba(15, 23, 42, 0.96);
+            --card: rgba(30, 41, 59, 0.72);
+            --card-soft: rgba(15, 23, 42, 0.62);
+            --border: rgba(148, 163, 184, 0.18);
+            --border-strong: rgba(148, 163, 184, 0.28);
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --soft: #cbd5e1;
+            --blue: #38bdf8;
+            --green: #34d399;
+            --red: #fb7185;
+            --amber: #fbbf24;
+            --violet: #818cf8;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            padding: 32px 20px;
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 34rem),
+                radial-gradient(circle at top right, rgba(129, 140, 248, 0.20), transparent 30rem),
+                linear-gradient(135deg, #020617 0%, var(--bg) 52%, #0f172a 100%);
+        }
+
+        .container {
+            width: min(100%, 1220px);
+            margin: 0 auto;
+            padding: 28px;
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            background: var(--panel);
+            box-shadow: 0 24px 80px rgba(2, 6, 23, 0.62);
+            backdrop-filter: blur(18px);
+        }
+
+        .app-hero {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+
+        .app-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            color: var(--blue);
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .app-title {
+            margin: 0;
+            font-size: clamp(28px, 4vw, 42px);
+            line-height: 1.08;
+            letter-spacing: -0.04em;
+        }
+
+        .app-subtitle {
+            max-width: 680px;
+            margin: 12px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            flex-shrink: 0;
+            padding: 10px 14px;
+            border: 1px solid rgba(52, 211, 153, 0.28);
+            border-radius: 999px;
+            background: rgba(16, 185, 129, 0.10);
+            color: #bbf7d0;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .status-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 14px rgba(52, 211, 153, 0.8);
+        }
+
         .app-workspace {
             display: flex;
-            gap: 24px;
-            width: 100%;
+            gap: 18px;
             align-items: stretch;
-            margin-top: 15px;
-            transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+            width: 100%;
         }
+
         .left-cabin {
-            flex: 1.4;
-            display: flex;
-            flex-direction: column;
-            transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+            flex: 1.45;
             min-width: 0;
-        }
-        .right-cabin {
-            flex: 1;
-            background: #0f172a;
-            border: 1px solid #334155;
-            border-radius: 14px;
-            padding: 24px;
             display: flex;
             flex-direction: column;
-            transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
-            position: relative;
-            box-shadow: inset 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        .right-cabin {
+            flex: 0.9;
             min-width: 320px;
-            opacity: 1;
-            transform: scale(1);
+            padding: 22px;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.72));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+            transition: all 0.3s ease;
             transform-origin: right center;
         }
-        
-        /* 折叠状态 */
+
         .right-cabin.collapsed {
             flex: 0;
-            min-width: 0;
             width: 0;
+            min-width: 0;
             padding: 0;
-            margin: 0;
-            border: none;
+            border: 0;
             opacity: 0;
+            overflow: hidden;
             pointer-events: none;
-            transform: scale(0.9);
+            transform: scale(0.96);
         }
-        
-        /* ===== 舱室物理分割线/折叠手柄 ===== */
+
         .cabin-divider {
             width: 14px;
-            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            position: relative;
+            cursor: pointer;
             user-select: none;
         }
-        .cabin-divider:hover .divider-handle {
-            background: #6366f1;
-            box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
-        }
+
         .divider-handle {
-            width: 6px;
-            height: 80px;
-            background: #334155;
-            border-radius: 3px;
+            width: 5px;
+            height: 74px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.22);
             transition: all 0.2s;
             position: relative;
         }
-        .divider-handle::before, .divider-handle::after {
+
+        .divider-handle::before,
+        .divider-handle::after {
             content: "";
             position: absolute;
+            left: 50%;
             width: 4px;
             height: 4px;
-            background: #f8fafc;
             border-radius: 50%;
-            left: 1px;
+            background: rgba(248, 250, 252, 0.74);
+            transform: translateX(-50%);
         }
-        .divider-handle::before { top: 30px; }
-        .divider-handle::after { bottom: 30px; }
-        
-        .upload-area { border: 2px dashed #3b82f6; border-radius: 8px; padding: 20px; text-align: center; background: rgba(59, 130, 246, 0.04); cursor: pointer; transition: all 0.3s; margin-bottom: 20px; }
-        .upload-area:hover { background: rgba(59, 130, 246, 0.1); border-color: #60a5fa; }
-        .upload-area input { display: none; }
-        .upload-title { font-size: 15px; color: #93c5fd; font-weight: bold; margin-bottom: 5px; }
 
-        .instruction { position: relative; background: #0f172a; border-left: 5px solid #10b981; padding: 15px 20px; border-radius: 0 8px 8px 0; color: #e2e8f0; font-size: 14px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.3); }
-        kbd { background: #1e40af; color: white; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 15px; margin: 0 4px; border-bottom: 2px solid #1e3a8a; }
-        
-        .radar-box { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 10px; background: #1e293b; padding: 8px 15px; border-radius: 30px; border: 1px solid #334155; }
-        .radar-dot { width: 12px; height: 12px; border-radius: 50%; background: #94a3b8; transition: all 0.2s; }
-        .radar-text { font-size: 13px; color: #94a3b8; font-weight: bold; transition: all 0.2s; min-width: 80px; text-align: center; }
+        .divider-handle::before { top: 25px; }
+        .divider-handle::after { bottom: 25px; }
+        .cabin-divider:hover .divider-handle { background: var(--violet); box-shadow: 0 0 18px rgba(129, 140, 248, 0.5); }
 
-        .header-box { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
-        h3 { font-size: 14px; color: #94a3b8; margin: 0; font-weight: bold; }
-        .btn-group { display: flex; gap: 8px; }
-        button { padding: 8px 14px; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; }
-        button:active { transform: scale(0.96); }
-        button:disabled { background: #334155 !important; color: #64748b; cursor: not-allowed; transform: none; box-shadow: none; }
-        
-        .btn-copy { background: linear-gradient(135deg, #10b981, #059669); } .btn-copy:hover { background: #059669; }
-        .btn-undo, .btn-redo { background: #334155; border: 1px solid #475569; color: #cbd5e1; } .btn-undo:hover, .btn-redo:hover { background: #475569; }
-        .btn-clear { background: #ef4444; } .btn-clear:hover { background: #dc2626; }
-        .btn-toggle { background: #f59e0b; } .btn-toggle:hover { background: #d97706; }
-        .btn-toggle.paused { background: #3b82f6; } .btn-toggle.paused:hover { background: #2563eb; }
-        
-        .btn-auto-scan { background: #8b5cf6; box-shadow: 0 4px 12px rgba(139,92,246,0.3); transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
-        .btn-auto-scan:hover { background: #7c3aed; transform: translateY(-1px); }
-        .btn-auto-scan.active { background: #ef4444 !important; box-shadow: 0 4px 12px rgba(239,68,68,0.4); animation: scanPulse 2s infinite; }
-        @keyframes scanPulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
-        
-        textarea { width: 100%; height: 320px; padding: 16px; border: 1px solid #475569; border-radius: 8px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 14px; box-sizing: border-box; background: #020617; color: #38bdf8; resize: vertical; line-height: 1.6; }
-        textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25); }
-        
-        .log-area { margin-top: 15px; font-size: 13px; max-height: 120px; overflow-y: auto; background: #020617; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
-        .log-success { color: #4ade80; } .log-error { color: #f87171; } .log-warn { color: #fbbf24; } .log-action { color: #60a5fa; font-weight: bold; }
+        .instruction {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 14px;
+            padding: 18px;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.13), rgba(15, 23, 42, 0.62));
+        }
 
-        /* ===== 文件接收可视化插槽 ===== */
-        .slot-block {
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            background: #020617;
-            border: 1px solid #334155;
-            font-size: 11px;
-            font-weight: 700;
+        .instruction-title {
+            margin-bottom: 4px;
+            font-size: 17px;
+            font-weight: 850;
+        }
+
+        .instruction-desc {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.65;
+        }
+
+        kbd {
+            display: inline-flex;
+            align-items: center;
+            min-height: 22px;
+            padding: 2px 7px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 7px;
+            background: rgba(15, 23, 42, 0.8);
+            color: #e0f2fe;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 12px;
+            box-shadow: inset 0 -1px 0 rgba(255,255,255,0.08);
+        }
+
+        .radar-box {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            color: #64748b;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .slot-block.filled {
-            background: linear-gradient(135deg, #10b981, #059669);
-            border-color: #34d399;
-            color: white;
-            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
-        }
-        .slot-block.missing {
-            border-color: #f87171;
-            color: #f87171;
-            animation: flashMissing 2s infinite;
-        }
-        @keyframes flashMissing {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
+            gap: 10px;
+            min-width: 118px;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.74);
         }
 
-        /* ===== ZXing 加载失败警告条 ===== */
+        .radar-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--muted);
+            transition: all 0.2s;
+        }
+
+        .radar-text {
+            min-width: 72px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 800;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .metric-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .metric-card {
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: var(--card-soft);
+        }
+
+        .metric-card span {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .metric-card strong {
+            color: var(--text);
+            font-size: 18px;
+            letter-spacing: -0.02em;
+        }
+
+        .upload-area {
+            display: block;
+            margin-bottom: 18px;
+            padding: 22px;
+            text-align: center;
+            border: 1px dashed rgba(56, 189, 248, 0.48);
+            border-radius: 22px;
+            background: rgba(14, 165, 233, 0.07);
+            cursor: pointer;
+            transition: all 0.25s;
+        }
+
+        .upload-area:hover {
+            border-color: var(--blue);
+            background: rgba(14, 165, 233, 0.12);
+            transform: translateY(-1px);
+        }
+
+        .upload-area input { display: none; }
+        .upload-title { margin-bottom: 6px; color: #bae6fd; font-size: 15px; font-weight: 850; }
+        .upload-subtitle { color: var(--muted); font-size: 13px; }
+
+        .header-box {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        h3 {
+            margin: 0;
+            color: var(--soft);
+            font-size: 15px;
+            font-weight: 850;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 9px 14px;
+            border: 1px solid transparent;
+            border-radius: 999px;
+            color: white;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.18s, background 0.18s, border-color 0.18s, opacity 0.18s;
+        }
+
+        button:hover { transform: translateY(-1px); }
+        button:active { transform: scale(0.98); }
+        button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+        .btn-copy { background: linear-gradient(135deg, #0ea5e9, #2563eb); box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22); }
+        .btn-undo, .btn-redo { background: rgba(30, 41, 59, 0.82); border-color: var(--border-strong); color: var(--soft); }
+        .btn-clear { background: rgba(244, 63, 94, 0.14); border-color: rgba(244, 63, 94, 0.34); color: #fecdd3; }
+        .btn-small { padding: 7px 11px; font-size: 12px; background: rgba(56, 189, 248, 0.14); border-color: rgba(56, 189, 248, 0.30); color: #bae6fd; }
+
+        .btn-auto-scan {
+            width: 100%;
+            padding: 13px 16px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            box-shadow: 0 14px 28px rgba(99, 102, 241, 0.24);
+        }
+
+        .btn-auto-scan.active {
+            background: linear-gradient(135deg, #f43f5e, #ef4444) !important;
+            animation: scanPulse 2s infinite;
+        }
+
+        .result-card {
+            position: relative;
+            width: 100%;
+        }
+
+        .file-receiver-console {
+            display: none;
+            margin-bottom: 16px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.78), rgba(15, 23, 42, 0.70));
+            box-shadow: 0 18px 42px rgba(2, 6, 23, 0.30);
+        }
+
+        .receiver-head {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            gap: 14px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .recv-icon {
+            display: grid;
+            place-items: center;
+            width: 48px;
+            height: 48px;
+            border-radius: 16px;
+            background: rgba(56, 189, 248, 0.12);
+            font-size: 25px;
+        }
+
+        #recvFileName {
+            overflow: hidden;
+            color: var(--text);
+            font-size: 16px;
+            font-weight: 850;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #recvStatusText {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 650;
+        }
+
+        .progress-percent {
+            color: var(--green);
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: -0.05em;
+        }
+
+        .progress-shell {
+            height: 10px;
+            width: 100%;
+            overflow: hidden;
+            margin-bottom: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 999px;
+            background: rgba(2, 6, 23, 0.76);
+        }
+
+        #recvProgressBar {
+            width: 0%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--blue), var(--violet), var(--green));
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+            transition: width 0.3s ease;
+        }
+
+        .missing-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 14px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        #recvSlotsGrid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            justify-content: center;
+            max-height: 174px;
+            overflow: auto;
+            padding: 4px;
+        }
+
+        .slot-block {
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            border-radius: 10px;
+            background: rgba(2, 6, 23, 0.74);
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 850;
+            transition: all 0.2s ease;
+        }
+
+        .slot-block.filled {
+            border-color: rgba(52, 211, 153, 0.60);
+            background: linear-gradient(135deg, #059669, #34d399);
+            color: white;
+            box-shadow: 0 0 14px rgba(52, 211, 153, 0.26);
+        }
+
+        .slot-block.missing {
+            border-color: rgba(251, 113, 133, 0.45);
+            color: #fda4af;
+        }
+
+        #downloadBtnContainer {
+            display: none;
+            margin-top: 16px;
+            text-align: center;
+            animation: popIn 0.28s ease;
+        }
+
+        #btnDownloadFile {
+            padding: 13px 22px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            box-shadow: 0 14px 28px rgba(16, 185, 129, 0.24);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 320px;
+            padding: 18px;
+            resize: vertical;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            background: rgba(2, 6, 23, 0.78);
+            color: #7dd3fc;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 14px;
+            line-height: 1.65;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: rgba(56, 189, 248, 0.58);
+            box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.12);
+        }
+
+        .log-area {
+            max-height: 126px;
+            overflow-y: auto;
+            margin-top: 14px;
+            padding: 13px 15px;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: rgba(2, 6, 23, 0.52);
+            color: var(--muted);
+            font-size: 12.5px;
+            line-height: 1.6;
+        }
+
+        .log-success { color: #86efac; }
+        .log-error { color: #fda4af; }
+        .log-warn { color: #fde68a; }
+        .log-action { color: #7dd3fc; font-weight: 800; }
+
+        .panel-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .panel-title-row p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 12.5px;
+            line-height: 1.55;
+        }
+
+        .video-container {
+            display: none;
+            position: relative;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: rgba(2, 6, 23, 0.70);
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.78);
+            color: white;
+            font-size: 11px;
+            font-weight: 800;
+            backdrop-filter: blur(8px);
+        }
+
+        #screenVideo {
+            width: 100%;
+            max-height: 250px;
+            object-fit: contain;
+            border-radius: 12px;
+        }
+
+        .right-cabin-info {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 12.5px;
+            line-height: 1.7;
+        }
+
+        .right-cabin-info strong {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--soft);
+            font-size: 13px;
+        }
+
+        .right-cabin-info ul {
+            margin: 0;
+            padding-left: 18px;
+        }
+
         .zxing-warning-bar {
             display: none;
-            background: linear-gradient(135deg, #92400e, #78350f);
-            border: 1px solid #f59e0b;
-            border-radius: 10px;
-            padding: 14px 20px;
             margin-bottom: 18px;
+            padding: 14px 16px;
+            border: 1px solid rgba(251, 191, 36, 0.38);
+            border-radius: 16px;
+            background: rgba(120, 53, 15, 0.54);
             color: #fef3c7;
             font-size: 13px;
-            font-weight: 600;
             line-height: 1.6;
-            box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2);
-            animation: slideDown 0.4s ease;
+            animation: slideDown 0.3s ease;
         }
+
         .zxing-warning-bar .warn-title {
+            margin-bottom: 5px;
+            color: var(--amber);
             font-size: 14px;
-            font-weight: 800;
-            color: #fbbf24;
-            margin-bottom: 6px;
+            font-weight: 850;
         }
+
+        .toast-host {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            z-index: 99;
+            display: grid;
+            gap: 10px;
+            width: min(360px, calc(100vw - 40px));
+        }
+
+        .toast {
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: rgba(15, 23, 42, 0.94);
+            color: var(--text);
+            box-shadow: 0 14px 34px rgba(2, 6, 23, 0.42);
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.5;
+            animation: toastIn 0.22s ease;
+            backdrop-filter: blur(16px);
+        }
+
+        .toast-success { border-color: rgba(52, 211, 153, 0.38); }
+        .toast-warn { border-color: rgba(251, 191, 36, 0.42); }
+        .toast-error { border-color: rgba(251, 113, 133, 0.42); }
+
+        @keyframes scanPulse {
+            0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.30); }
+            70% { box-shadow: 0 0 0 12px rgba(244, 63, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+        }
+
         @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
+            from { opacity: 0; transform: translateY(-8px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 980px) {
+            body { padding: 18px 12px; }
+            .container { padding: 20px; border-radius: 22px; }
+            .app-hero, .instruction, .header-box { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
+            .app-workspace { flex-direction: column; }
+            .cabin-divider { display: none; }
+            .right-cabin { width: 100%; min-width: 0; }
+            .metric-row { grid-template-columns: 1fr; }
+            .btn-group { justify-content: flex-start; }
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2 style="margin-top: 0; color: #f8fafc; text-align: center; letter-spacing: 1px; background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 25px;">内网数据传输工具 - 接收端大融合主控台</h2>
+    <header class="app-hero">
+        <div>
+            <div class="app-kicker">📡 接收端</div>
+            <h1 class="app-title">内网数据传输工具</h1>
+            <p class="app-subtitle">通过粘贴、拖拽或屏幕扫描接收二维码分片，自动去重拼合，完成后复制文本或下载文件。</p>
+        </div>
+        <div class="status-pill">
+            <span class="status-dot"></span>
+            本地离线运行
+        </div>
+    </header>
 
     <!-- 前端解码引擎加载失败警告条（默认隐藏，JS 动态控制） -->
     <div id="zxingWarningBar" class="zxing-warning-bar">
         <div class="warn-title">⚠️ 前端解码引擎 (jsQR) 加载失败</div>
-        <div>粘贴截图 (Ctrl+V) 和天眼全自动视频监控功能 <b>不可用</b>。仅 <kbd>F8</kbd> 全局截屏捕获通道正常工作。</div>
+        <div>粘贴截图 (Ctrl+V)、拖拽图片和屏幕扫描功能 <b>不可用</b>。</div>
         <div style="margin-top: 6px; color: #fde68a;">排查方向: 检查 <code>/static/jsqr-1.4.0.js</code> 文件是否存在、Flask 是否正确托管 static 目录。</div>
     </div>
     
@@ -201,25 +708,36 @@
         <!-- 左舱：接收展示与数据舱 -->
         <div class="left-cabin" id="leftCabin">
             <div class="instruction">
-                <div>📡 <strong>后台监听已激活：</strong> 在任何外部窗口按 <kbd>F8</kbd> 自动全屏捕获并智能拼接。</div>
-                <div style="font-size: 13px; color: #94a3b8;">已拼合分块数: <span id="chunkCount" style="color: white; font-weight: bold;">0</span> 个</div>
-                
+                <div>
+                    <div class="instruction-title">准备接收</div>
+                    <div class="instruction-desc">按 <kbd>Ctrl+V</kbd> 粘贴截图，或拖入二维码图片；需要自动轮播识别时，开启右侧屏幕扫描。</div>
+                </div>
                 <div class="radar-box">
                     <div id="radarDot" class="radar-dot"></div>
-                    <div id="radarText" class="radar-text">💤 待命连接中</div>
+                    <div id="radarText" class="radar-text">待命</div>
+                </div>
+            </div>
+
+            <div class="metric-row">
+                <div class="metric-card">
+                    <span>已接收</span>
+                    <strong><span id="chunkCount">0</span> 片</strong>
+                </div>
+                <div class="metric-card">
+                    <span>接收方式</span>
+                    <strong>粘贴 / 拖拽 / 扫描</strong>
                 </div>
             </div>
 
             <label class="upload-area" id="dropZone">
                 <input type="file" id="fileInput" multiple accept="image/*">
-                <div class="upload-title">🔥 网页备用通道：焦点在此页面时，直接按 Ctrl+V 粘贴截图</div>
-                <div style="font-size: 13px; color: #94a3b8;">(也支持拖拽图片到此处，将自动使用 jsQR 引擎高精度提取)</div>
+                <div class="upload-title">粘贴或拖拽二维码图片</div>
+                <div class="upload-subtitle">页面获得焦点后可直接粘贴截图；批量图片会按文件名自动排序解析。</div>
             </label>
 
             <div class="header-box">
-                <h3 id="previewTitle">智能拼图结果实时预览：</h3>
+                <h3 id="previewTitle">接收预览</h3>
                 <div class="btn-group">
-                    <button id="btnToggle" class="btn-toggle" onclick="toggleMonitoring()">⏸️ 暂停 F8 监听</button>
                     <button class="btn-copy" onclick="copyAll()">📋 一键复制</button>
                     <button id="btnUndo" class="btn-undo" onclick="undo()" disabled>↩️ 撤销</button>
                     <button id="btnRedo" class="btn-redo" onclick="redo()" disabled>↪️ 重做</button>
@@ -227,76 +745,81 @@
                 </div>
             </div>
             
-            <div style="position: relative; width: 100%;">
+            <div class="result-card">
                 <!-- 文件接收舱室 (磨砂玻璃面板) -->
-                <div id="fileReceiverConsole" style="display: none; background: rgba(30, 41, 59, 0.65); border: 1px solid #334155; border-radius: 8px; padding: 26px; text-align: center; backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,0.4); margin-bottom: 16px;">
-                    <div class="recv-icon" style="font-size: 44px; margin-bottom: 12px; filter: drop-shadow(0 4px 10px rgba(99, 102, 241, 0.35));">📁</div>
-                    <div id="recvFileName" style="font-size: 16px; font-weight: 700; color: #f8fafc; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        文件投递中...
+                <div id="fileReceiverConsole" class="file-receiver-console">
+                    <div class="receiver-head">
+                        <div class="recv-icon">📁</div>
+                        <div>
+                            <div id="recvFileName">等待传输任务</div>
+                            <div id="recvStatusText">收到分片后会在这里显示进度。</div>
+                        </div>
+                        <div id="recvProgressPercent" class="progress-percent">0%</div>
                     </div>
-                    <div id="recvStatusText" style="font-size: 13px; color: #94a3b8; font-weight: 600; margin-bottom: 16px;">
-                        正在等待分片数据流注入...
+
+                    <div class="progress-shell">
+                        <div id="recvProgressBar"></div>
                     </div>
-                    
-                    <!-- 渐变流光进度条 -->
-                    <div style="background: #020617; border-radius: 8px; height: 10px; width: 100%; border: 1px solid #334155; overflow: hidden; margin-bottom: 22px; position: relative;">
-                        <div id="recvProgressBar" style="background: linear-gradient(90deg, #4f46e5, #6366f1, #34d399); width: 0%; height: 100%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);"></div>
+
+                    <div class="missing-row">
+                        <span id="recvMissingSummary">暂无分片任务</span>
+                        <button id="btnCopyMissing" class="btn-small" onclick="copyMissingChunks()" style="display: none;">复制缺片</button>
                     </div>
-                    
-                    <!-- 分片插槽物理方格矩阵 -->
-                    <div id="recvSlotsGrid" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 22px;"></div>
-                    
-                    <!-- 下载卡片按钮舱 -->
-                    <div id="downloadBtnContainer" style="display: none; animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);">
-                        <button id="btnDownloadFile" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; padding: 14px 28px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4); display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;" onclick="downloadTransferredFile()">
-                            📥 拼图集齐！一键无损还原下载
-                        </button>
+
+                    <div id="recvSlotsGrid"></div>
+
+                    <div id="downloadBtnContainer">
+                        <button id="btnDownloadFile" onclick="downloadTransferredFile()">📥 下载文件</button>
                     </div>
                 </div>
                 
-                <textarea id="resultText" placeholder="等待数据流注入..." readonly></textarea>
+                <textarea id="resultText" placeholder="等待接收数据..." readonly></textarea>
             </div>
             
             <div class="log-area" id="logArea">
-                <div style="color: #94a3b8;">[系统] 智能拼图引擎就绪。支持高级拼图元数据协议，能自动识别并指出缺失分片。</div>
+                <div style="color: #94a3b8;">[系统] 接收引擎已就绪。收到分片后会自动拼合并标出缺片。</div>
             </div>
         </div>
         
         <!-- 舱室物理分割线/折叠控制器 -->
-        <div class="cabin-divider" onclick="toggleRightCabin()" title="展开/收起天眼视频面板">
+        <div class="cabin-divider" onclick="toggleRightCabin()" title="展开/收起屏幕扫描面板">
             <div class="divider-handle"></div>
         </div>
         
-        <!-- 右舱：全自动天眼监控舱 -->
+        <!-- 右舱：屏幕扫描 -->
         <div class="right-cabin" id="rightCabin">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="color: #818cf8; font-weight: 800; font-size: 14px; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px;">
-                    🎥 天眼全自动视频监控
-                </h3>
+            <div class="panel-title-row">
+                <div>
+                    <h3>🎥 屏幕扫描</h3>
+                    <p>选择发送端窗口后，系统会自动识别轮播二维码。</p>
+                </div>
             </div>
             
-            <button id="btnScreenScan" class="btn-auto-scan" onclick="toggleScreenScan()" style="width: 100%; padding: 12px; border-radius: 6px; border: none; font-size: 13px; font-weight: 800; color: white; cursor: pointer; margin-bottom: 15px;">
-                🎥 开启屏幕全自动监控
+            <button id="btnScreenScan" class="btn-auto-scan" onclick="toggleScreenScan()">
+                🎥 开启屏幕扫描
             </button>
             
             <!-- 视频实时预览窗 -->
-            <div id="videoContainer" class="video-container" style="display: none; flex-direction: column; align-items: center; background: #020617; border-radius: 8px; padding: 10px; box-sizing: border-box; position: relative; border: 1px solid #475569; width: 100%;">
-                <div class="video-overlay" id="videoOverlay" style="position: absolute; top: 15px; right: 15px; background: rgba(220, 38, 38, 0.9); color: white; padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: bold; display: flex; align-items: center; gap: 6px; z-index: 10;">
-                    🟢 天眼实时监控画面中...
+            <div id="videoContainer" class="video-container">
+                <div class="video-overlay" id="videoOverlay">
+                    🟢 扫描中
                 </div>
-                <video id="screenVideo" autoplay muted playsinline style="width: 100%; max-height: 240px; border-radius: 4px; object-fit: contain;"></video>
+                <video id="screenVideo" autoplay muted playsinline></video>
             </div>
             
-            <!-- 天眼雷达说明 -->
-            <div class="right-cabin-info" style="font-size: 12px; color: #64748b; margin-top: 15px; line-height: 1.6; border-top: 1px solid #334155; padding-top: 15px;">
-                <div style="font-weight: 700; color: #94a3b8; margin-bottom: 5px;">🤖 天眼看门狗运行协议：</div>
-                • 开启监控后，天眼将高频（500ms）截获画面并解码。<br>
-                • <b>冻结帧侦测自愈</b>：视频画面静止 3 秒将自动重置轨道。<br>
-                • <b>解析超时看门狗</b>：连续 3 次解析超时将自动静默重启。
+            <!-- 屏幕扫描说明 -->
+            <div class="right-cabin-info">
+                <strong>自动识别说明</strong>
+                <ul>
+                    <li>每 500ms 捕获一次画面。</li>
+                    <li>重复分片会自动忽略。</li>
+                    <li>全部集齐后自动停止扫描。</li>
+                </ul>
             </div>
         </div>
     </div>
 </div>
+<div id="toastHost" class="toast-host"></div>
 
 <script>
     // ==================== 解码引擎初始化 ====================
@@ -306,7 +829,7 @@
         console.error('[诊断-引擎] ❌ jsQR 未加载！请检查 /static/jsqr-1.4.0.js 是否存在。');
         document.getElementById('zxingWarningBar').style.display = 'block';
     } else {
-        console.log('[诊断-引擎] ✅ jsQR 已就绪，粘贴和天眼通道可用。');
+        console.log('[诊断-引擎] ✅ jsQR 已就绪，粘贴和屏幕扫描通道可用。');
     }
 
     // ==================== 统一解码辅助函数：jsQR 直接读 Canvas 像素 ====================
@@ -320,11 +843,13 @@
     }
     const resultText = document.getElementById('resultText');
     const logArea = document.getElementById('logArea');
-    const btnToggle = document.getElementById('btnToggle');
     const radarDot = document.getElementById('radarDot');
     const radarText = document.getElementById('radarText');
     const chunkCountDisplay = document.getElementById('chunkCount');
     const previewTitle = document.getElementById('previewTitle');
+    const recvProgressPercent = document.getElementById('recvProgressPercent');
+    const recvMissingSummary = document.getElementById('recvMissingSummary');
+    const btnCopyMissing = document.getElementById('btnCopyMissing');
 
     // ================== 右舱折叠控制 ==================
     let isRightPanelCollapsed = false;
@@ -360,6 +885,67 @@
         } catch(e) {}
     }
 
+    function showToast(message, type = 'info') {
+        const toastHost = document.getElementById('toastHost');
+        if (!toastHost) return;
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.innerText = message;
+        toastHost.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(8px)';
+            setTimeout(() => toast.remove(), 220);
+        }, 2600);
+    }
+
+    function base64ToBytes(base64Text) {
+        const binaryStr = window.atob(base64Text);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    function looksLikeZlib(bytes) {
+        if (!bytes || bytes.length < 2) return false;
+        if (bytes[0] !== 0x78) return false;
+        return [0x01, 0x5e, 0x9c, 0xda].includes(bytes[1]);
+    }
+
+    function maybeInflateBytes(bytes, preferCompressed = false) {
+        const shouldTryInflate = preferCompressed || looksLikeZlib(bytes);
+        if (!shouldTryInflate) {
+            return { bytes, compressed: false, autoDetected: false };
+        }
+
+        try {
+            return {
+                bytes: pako.inflate(bytes),
+                compressed: true,
+                autoDetected: !preferCompressed && looksLikeZlib(bytes)
+            };
+        } catch (e) {
+            if (preferCompressed) {
+                throw e;
+            }
+            return { bytes, compressed: false, autoDetected: false };
+        }
+    }
+
+    function decodeBase64Text(base64Text, preferCompressed = false) {
+        const decoded = maybeInflateBytes(base64ToBytes(base64Text), preferCompressed);
+        return {
+            bytes: decoded.bytes,
+            text: new TextDecoder('utf-8').decode(decoded.bytes),
+            compressed: decoded.compressed,
+            autoDetected: decoded.autoDetected
+        };
+    }
+
     // ================== 智能拼图协议核心状态 ==================
     let currentTaskId = "";
     let currentTaskCompressed = false; // 记录当前任务是否启用了 pako 压缩
@@ -376,7 +962,8 @@
         total: 0, 
         legacyText: "", 
         count: 0,
-        fileName: ""
+        fileName: "",
+        compressed: false
     }];
     let historyIndex = 0;
 
@@ -390,36 +977,45 @@
             radarDot.style.background = '#3b82f6';
             radarDot.style.boxShadow = '0 0 12px #3b82f6';
             radarText.style.color = '#3b82f6';
-            radarText.innerText = '🔵 正在扫描...';
+            radarText.innerText = '扫描中';
+            radarTimer = setTimeout(() => {
+                if (!isMonitoringPaused) {
+                    radarText.innerText = '就绪';
+                    radarDot.style.background = '#10b981';
+                    radarDot.style.boxShadow = 'none';
+                    radarText.style.color = '#10b981';
+                    log('⚠️ 扫描响应超时，已自动恢复监控状态。', 'warn');
+                }
+            }, 6000);
         } else if (status === 'success') {
             radarDot.style.background = '#10b981';
             radarDot.style.boxShadow = '0 0 12px #10b981';
             radarText.style.color = '#10b981';
-            radarText.innerText = '🟢 捕获成功';
+            radarText.innerText = '已捕获';
             autoResetRadar();
         } else if (status === 'duplicate') {
             radarDot.style.background = '#fbbf24';
             radarDot.style.boxShadow = '0 0 12px #fbbf24';
             radarText.style.color = '#fbbf24';
-            radarText.innerText = '🟡 重复画面';
+            radarText.innerText = '重复';
             autoResetRadar();
         } else if (status === 'not_found') {
             radarDot.style.background = '#94a3b8';
             radarDot.style.boxShadow = 'none';
             radarText.style.color = '#94a3b8';
-            radarText.innerText = '⚪ 未见二维码';
+            radarText.innerText = '未识别';
             autoResetRadar();
         } else if (status === 'paused') {
             radarDot.style.background = '#f59e0b';
             radarDot.style.boxShadow = 'none';
             radarText.style.color = '#f59e0b';
-            radarText.innerText = '⏸️ 监听已暂停';
+            radarText.innerText = '暂停';
         } else if (status === 'ready') {
             if (isMonitoringPaused) return;
             radarDot.style.background = '#10b981';
             radarDot.style.boxShadow = 'none';
             radarText.style.color = '#10b981';
-            radarText.innerText = '🟢 监控中';
+            radarText.innerText = '就绪';
         }
     }
     
@@ -427,27 +1023,6 @@
         radarTimer = setTimeout(() => { setRadar('ready'); }, 1500);
     }
     setRadar('ready');
-
-    // ================== 开启/暂停 F8 监听 ==================
-    function toggleMonitoring() {
-        fetch('/toggle', {method: 'POST'})
-        .then(res => res.json())
-        .then(data => {
-            if (data.state === 'active') {
-                isMonitoringPaused = false;
-                btnToggle.innerText = '⏸️ 暂停 F8 监听';
-                btnToggle.classList.remove('paused');
-                setRadar('ready');
-                log("▶️ 已恢复全局 F8 键盘截屏监听。", "action");
-            } else {
-                isMonitoringPaused = true;
-                btnToggle.innerText = '▶️ 恢复 F8 监听';
-                btnToggle.classList.add('paused');
-                setRadar('paused');
-                log("⏸️ 已暂停全局 F8 键盘截屏监听。", "warn");
-            }
-        });
-    }
 
     // ================== 系统日志记录（上限 200 条，防止 DOM 节点无限增长）==================
     const LOG_MAX = 200;
@@ -512,6 +1087,18 @@
             // 4. 存入内存拼图卡槽中
             puzzleChunks[chunkIndex] = decryptedChunk;
             chunkCount = Object.keys(puzzleChunks).length;
+
+            // 如果协议头没带 COMP:1，但首片看起来就是 zlib 头，提前标记为压缩任务
+            if (!currentTaskCompressed && puzzleChunks[1] !== undefined) {
+                try {
+                    const firstChunkBytes = base64ToBytes(puzzleChunks[1]);
+                    if (looksLikeZlib(firstChunkBytes)) {
+                        currentTaskCompressed = true;
+                        log("📦 自动识别到 zlib 压缩头，已标记当前任务为压缩任务。", "action");
+                    }
+                } catch (e) {}
+            }
+
             setRadar('success');
             playBeep(1800); // 捕获成功：高频滴声
             log(`✅ 成功追加分片 [${chunkIndex}/${totalChunks}] (数据源: ${sourceName})`, 'success');
@@ -528,15 +1115,15 @@
             updateTransferUI(taskType, currentFileTransferName, chunkCount, totalChunks, missingChunks);
             
             if (taskType === 'file') {
-                previewTitle.innerText = `智能拼图预览 (当前收集: ${chunkCount}/${totalChunks})：`;
+                previewTitle.innerText = `文件接收（${chunkCount}/${totalChunks}）`;
                 if (missingChunks.length === 0) {
                     const compNote = currentTaskCompressed ? '（含解压缩）' : '';
                     log(`🎉 恭喜！文件 [${currentFileTransferName}] 已经 100% 集齐！已激活一键还原下载！${compNote}`, 'success');
-                    previewTitle.innerHTML = `智能拼图预览 <span style="color: #4ade80;">(🎉 完美集齐 ${totalChunks}/${totalChunks})</span>：`;
-                    // 分片集齐后自动停止天眼监控，避免持续占用屏幕录制权限
+                    previewTitle.innerHTML = `文件已集齐 <span style="color: #4ade80;">(${totalChunks}/${totalChunks})</span>`;
+                    // 分片集齐后自动停止屏幕扫描，避免持续占用屏幕录制权限
                     if (isScreenScanning) {
                         stopScreenScan();
-                        log('🎥 天眼全自动监控已自动关闭（分片已全部集齐）。', 'success');
+                        log('🎥 屏幕扫描已自动关闭（分片已全部集齐）。', 'success');
                     }
                 } else {
                     log(`⏳ 接收进度: ${chunkCount}/${totalChunks}，尚缺分片: [ ${missingChunks.join(', ')} ]。请在发送端补扫。`, 'warn');
@@ -552,49 +1139,54 @@
                     // 全部集齐：统一解码 base64 → 字节数组 → 若压缩则解压 → UTF-8 文本
                     for (let i = 1; i <= totalChunks; i++) fullBase64 += puzzleChunks[i];
                     try {
-                        // base64 → 二进制字节
-                        const binaryStr = window.atob(fullBase64);
-                        const bytes = new Uint8Array(binaryStr.length);
-                        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-                        // 若发送端启用了压缩，用 pako 解压
-                        const finalBytes = currentTaskCompressed ? pako.inflate(bytes) : bytes;
-                        fullText = new TextDecoder('utf-8').decode(finalBytes);
+                        const decoded = decodeBase64Text(fullBase64, currentTaskCompressed);
+                        fullText = decoded.text;
+                        if (!currentTaskCompressed && decoded.compressed) {
+                            currentTaskCompressed = true;
+                            log("📦 自动识别到 zlib 压缩任务，已补充解压。", "action");
+                        }
                     } catch (e) {
                         fullText = `[解码错误: ${e.message}]`;
                         console.error('[接收端] 文本解码/解压失败:', e);
                     }
                 } else {
-                    // 未集齐：显示已收到分片的预览
-                    for (let i = 1; i <= totalChunks; i++) {
-                        if (puzzleChunks[i] !== undefined) {
-                            if (currentTaskCompressed) {
-                                fullText += `[📦 第 ${i} 部分：压缩数据块已安全接收，待集齐后解压预览...]\n`;
-                            } else {
+                    // 未集齐：压缩任务先不要把二进制当文本预览，避免出现 x�%� 这类乱码
+                    if (currentTaskCompressed) {
+                        fullText = `【已压缩任务】\n`;
+                        for (let i = 1; i <= totalChunks; i++) {
+                            fullText += puzzleChunks[i] !== undefined
+                                ? `[✓ 第 ${i} 片已收到]\n`
+                                : `[--- ⏳ 等待捕获第 ${i} 部分分片 ---]\n`;
+                        }
+                    } else {
+                        // 非压缩任务才尝试按文本预览
+                        for (let i = 1; i <= totalChunks; i++) {
+                            if (puzzleChunks[i] !== undefined) {
                                 try {
                                     const bStr = window.atob(puzzleChunks[i]);
                                     const bArr = new Uint8Array(bStr.length);
                                     for (let j = 0; j < bStr.length; j++) bArr[j] = bStr.charCodeAt(j);
                                     fullText += new TextDecoder('utf-8', {fatal: false}).decode(bArr);
                                 } catch(e) { fullText += puzzleChunks[i]; }
+                            } else {
+                                fullText += `[--- ⏳ 等待捕获第 ${i} 部分分片 ---]\n`;
                             }
-                        } else {
-                            fullText += `[--- ⏳ 等待捕获第 ${i} 部分分片 ---]\n`;
                         }
                     }
                 }
 
                 resultText.value = fullText;
                 resultText.scrollTop = resultText.scrollHeight;
-                previewTitle.innerText = `智能拼图预览 (当前收集: ${chunkCount}/${totalChunks})：`;
+                previewTitle.innerText = `文本接收（${chunkCount}/${totalChunks}）`;
 
                 if (hasAllChunks) {
                     const compNote = currentTaskCompressed ? '（已自动解压缩）' : '';
                     log(`🎉 太棒了！文本已全部集齐，已实现无损智能还原！${compNote}`, 'success');
-                    previewTitle.innerHTML = `智能拼图预览 <span style="color: #4ade80;">(🎉 完美集齐 ${totalChunks}/${totalChunks})</span>：`;
-                    // 分片集齐后自动停止天眼监控
+                    previewTitle.innerHTML = `文本已集齐 <span style="color: #4ade80;">(${totalChunks}/${totalChunks})</span>`;
+                    // 分片集齐后自动停止屏幕扫描
                     if (isScreenScanning) {
                         stopScreenScan();
-                        log('🎥 天眼全自动监控已自动关闭（分片已全部集齐）。', 'success');
+                        log('🎥 屏幕扫描已自动关闭（分片已全部集齐）。', 'success');
                     }
                 } else {
                     log(`⏳ 拼图进度: ${chunkCount}/${totalChunks}，缺漏分片: [ ${missingChunks.join(', ')} ]，请补扫。`, 'warn');
@@ -608,18 +1200,52 @@
             
             let finalStr = rawData;
             try {
-                finalStr = decodeURIComponent(escape(window.atob(rawData)));
+                const decoded = decodeBase64Text(rawData);
+                finalStr = decoded.text;
+                if (decoded.compressed) {
+                    log("📦 自动识别到无头 zlib 压缩二维码，已补充解压。", "action");
+                }
             } catch(e) {}
             
             globalMergedString += finalStr;
             chunkCount++;
             resultText.value = globalMergedString;
             resultText.scrollTop = resultText.scrollHeight;
-            previewTitle.innerText = `数据追加预览 (共捕获: ${chunkCount}项)：`;
+            previewTitle.innerText = `普通二维码预览（${chunkCount} 项）`;
             setRadar('success');
             playBeep(1200); // 普通成功：稍低频滴声
             log(`✅ 成功追加普通二维码数据 [${sourceName}]，提取 ${finalStr.length} 字符`, 'success');
             saveState();
+        }
+    }
+
+    function summarizeMissingChunks(missingChunks) {
+        if (missingChunks.length <= 12) {
+            return missingChunks.join(', ');
+        }
+
+        return `${missingChunks.slice(0, 12).join(', ')} 等 ${missingChunks.length} 片`;
+    }
+
+    async function copyMissingChunks() {
+        const missingChunks = [];
+        for (let chunkIndex = 1; chunkIndex <= totalChunksCount; chunkIndex++) {
+            if (puzzleChunks[chunkIndex] === undefined) {
+                missingChunks.push(chunkIndex);
+            }
+        }
+
+        if (missingChunks.length === 0) {
+            showToast('没有缺失分片，已经集齐啦。', 'success');
+            return;
+        }
+
+        const missingText = missingChunks.join(', ');
+        try {
+            await navigator.clipboard.writeText(missingText);
+            showToast(`已复制缺片编号：${summarizeMissingChunks(missingChunks)}`, 'success');
+        } catch (err) {
+            showToast(`缺片编号：${missingText}`, 'warn');
         }
     }
 
@@ -629,35 +1255,41 @@
         consoleEl.style.display = "block"; // 全局激活进度舱
         
         // 动态修改图标与样式
-        const iconEl = consoleEl.querySelector("div:first-child");
+        const iconEl = consoleEl.querySelector(".recv-icon");
         if (taskType === 'file') {
             iconEl.innerText = "📁";
-            iconEl.style.filter = "drop-shadow(0 4px 10px rgba(99, 102, 241, 0.35))";
-            document.getElementById("recvFileName").innerText = `📁 正在接收文件: ${taskName}`;
+            document.getElementById("recvFileName").innerText = taskName || "未命名文件";
             resultText.style.display = "none"; // 文件模式下隐藏文本框
         } else {
             iconEl.innerText = "📝";
-            iconEl.style.filter = "drop-shadow(0 4px 10px rgba(16, 185, 129, 0.35))";
-            document.getElementById("recvFileName").innerText = `📝 正在接收文本: 长文本传输流`;
+            document.getElementById("recvFileName").innerText = "长文本传输";
             resultText.style.display = "block"; // 文本模式下保留文本框预览
         }
         
-        document.getElementById("recvStatusText").innerText = `已收集分片: ${chunkCount} / ${total} (任务 ID: ${currentTaskId})`;
-        
-        const percent = Math.round((chunkCount / total) * 100);
+        const percent = total > 0 ? Math.round((chunkCount / total) * 100) : 0;
+        const statusText = missingChunks.length === 0 ? "已集齐，可以继续下一步" : `还缺 ${missingChunks.length} 片`;
+        document.getElementById("recvStatusText").innerText = `${chunkCount} / ${total} 片 · ${statusText}`;
         document.getElementById("recvProgressBar").style.width = `${percent}%`;
+        recvProgressPercent.innerText = `${percent}%`;
+
+        recvMissingSummary.innerText = missingChunks.length === 0
+            ? "分片已全部集齐"
+            : `缺失分片：${summarizeMissingChunks(missingChunks)}`;
+        btnCopyMissing.style.display = missingChunks.length === 0 ? "none" : "inline-flex";
         
         // 渲染物理方格插槽矩阵
         const grid = document.getElementById("recvSlotsGrid");
         grid.innerHTML = "";
-        for (let i = 1; i <= total; i++) {
+        for (let chunkIndex = 1; chunkIndex <= total; chunkIndex++) {
             const slot = document.createElement("div");
             slot.className = "slot-block";
-            slot.innerText = i;
-            if (puzzleChunks[i] !== undefined) {
+            slot.innerText = chunkIndex;
+            if (puzzleChunks[chunkIndex] !== undefined) {
                 slot.classList.add("filled");
+                slot.title = `第 ${chunkIndex} 片已接收`;
             } else {
                 slot.classList.add("missing");
+                slot.title = `缺失第 ${chunkIndex} 片`;
             }
             grid.appendChild(slot);
         }
@@ -679,28 +1311,18 @@
             if (puzzleChunks[i] !== undefined) {
                 fullBase64 += puzzleChunks[i];
             } else {
-                alert("⚠️ 尚有缺失分片，无法还原文件！");
+                showToast("尚有缺失分片，无法还原文件。", "warn");
                 return;
             }
         }
         
         try {
-            const binaryString = window.atob(fullBase64);
-            const len = binaryString.length;
-            let bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-            
-            // 若发送端启用了压缩（COMP:1），用 pako 解压还原原始字节
-            if (currentTaskCompressed) {
-                try {
-                    bytes = pako.inflate(bytes);
-                    log(`📦 pako 解压完成，还原字节数: ${bytes.length}`, 'action');
-                } catch (inflateErr) {
-                    log(`❌ 解压失败: ${inflateErr.message}`, 'error');
-                    throw inflateErr;
-                }
+            const decoded = decodeBase64Text(fullBase64, currentTaskCompressed);
+            let bytes = decoded.bytes;
+
+            if (decoded.compressed) {
+                log(`📦 ${currentTaskCompressed ? 'pako 解压完成' : '自动识别到 zlib 压缩文件，已解压'}，还原字节数: ${bytes.length}`, 'action');
+                currentTaskCompressed = true;
             }
             
             const blob = new Blob([bytes], { type: "application/octet-stream" });
@@ -716,9 +1338,10 @@
             
             const compNote = currentTaskCompressed ? '（已解压缩）' : '';
             log(`💾 文件 [${currentFileTransferName}] 拼合成功${compNote}，已触发本地无损还原下载！`, 'success');
+            showToast(`文件已开始下载：${currentFileTransferName}`, 'success');
         } catch (err) {
             log(`❌ 文件流拼接还原异常: ${err.message}`, 'error');
-            alert(`❌ 还原文件失败: ${err.message}`);
+            showToast(`还原文件失败：${err.message}`, 'error');
 
         }
     }
@@ -743,7 +1366,8 @@
             total: totalChunksCount,
             legacyText: globalMergedString,
             count: chunkCount,
-            fileName: currentFileTransferName
+            fileName: currentFileTransferName,
+            compressed: currentTaskCompressed
         });
         historyIndex++;
         updateButtonStates();
@@ -773,6 +1397,7 @@
         globalMergedString = state.legacyText;
         chunkCount = state.count;
         currentFileTransferName = state.fileName || "";
+        currentTaskCompressed = !!state.compressed;
         
         // 重塑 UI 展现
         if (currentTaskId) {
@@ -786,7 +1411,7 @@
             updateTransferUI(taskType, currentFileTransferName, chunkCount, totalChunksCount, missingChunks);
             
             if (taskType === 'file') {
-                previewTitle.innerText = `智能拼图预览 (当前收集: ${chunkCount}/${totalChunksCount})：`;
+                previewTitle.innerText = `文件接收（${chunkCount}/${totalChunksCount}）`;
             } else {
                 let fullText = "";
                 for (let i = 1; i <= totalChunksCount; i++) {
@@ -797,13 +1422,13 @@
                     }
                 }
                 resultText.value = fullText;
-                previewTitle.innerText = `智能拼图预览 (当前收集: ${chunkCount}/${totalChunksCount})：`;
+                previewTitle.innerText = `文本接收（${chunkCount}/${totalChunksCount}）`;
             }
         } else {
             document.getElementById("fileReceiverConsole").style.display = "none";
             resultText.style.display = "block";
             resultText.value = globalMergedString;
-            previewTitle.innerText = `数据追加预览 (共捕获: ${chunkCount}项)：`;
+            previewTitle.innerText = chunkCount > 0 ? `普通二维码预览（${chunkCount} 项）` : "接收预览";
         }
         
         resultText.scrollTop = resultText.scrollHeight;
@@ -819,68 +1444,52 @@
 
     async function copyAll() {
         if (currentFileTransferName) {
-            alert(`⚠️ 当前为文件传输模式，请直接点击“一键无损还原下载”进行保存。`);
+            showToast("当前是文件传输，请使用“下载文件”。", "warn");
             return;
         }
-        if (!resultText.value) return;
+        if (!resultText.value) {
+            showToast("暂无可复制文本。", "warn");
+            return;
+        }
         try {
             await navigator.clipboard.writeText(resultText.value);
             log(`📋 成功复制全部拼合文本到剪贴板！`, "action");
-            alert(`✅ 复制成功！共提取并整理了 ${resultText.value.length} 个字符。`);
+            showToast(`已复制 ${resultText.value.length} 个字符。`, "success");
         } catch (err) {
             resultText.select();
             document.execCommand('copy');
             window.getSelection().removeAllRanges();
             log(`📋 成功复制全部拼合文本到剪贴板！`, "action");
-            alert(`✅ 复制成功！共提取并整理了 ${resultText.value.length} 个字符。`);
+            showToast(`已复制 ${resultText.value.length} 个字符。`, "success");
         }
     }
 
     function clearAll() {
         currentTaskId = "";
+        currentTaskCompressed = false;
         puzzleChunks = {};
         totalChunksCount = 0;
         currentFileTransferName = "";
         globalMergedString = "";
         chunkCount = 0;
-        historyStack = [{ taskId: "", chunks: {}, total: 0, legacyText: "", count: 0, fileName: "" }];
+        historyStack = [{ taskId: "", chunks: {}, total: 0, legacyText: "", count: 0, fileName: "", compressed: false }];
         historyIndex = 0;
         
         resultText.value = "";
         document.getElementById("fileReceiverConsole").style.display = "none";
         resultText.style.display = "block";
+        document.getElementById("recvProgressBar").style.width = "0%";
+        recvProgressPercent.innerText = "0%";
+        recvMissingSummary.innerText = "暂无分片任务";
+        btnCopyMissing.style.display = "none";
+        document.getElementById("recvSlotsGrid").innerHTML = "";
         
         logArea.innerHTML = "";
-        previewTitle.innerText = "智能拼图预览：";
+        previewTitle.innerText = "接收预览";
         updateButtonStates();
-        fetch('/reset', {method: 'POST'}); 
         log("🗑️ 数据传输流水线与合并缓存已彻底清空。");
+        showToast("已清空接收状态。", "success");
     }
-
-    // ================== 后端 SSE 接收流 ==================
-    const evtSource = new EventSource("/stream");
-    evtSource.onmessage = function(event) {
-        const data = JSON.parse(event.data);
-        if (data.status === "heartbeat") return; // 心跳保活信号，静默忽略
-        if (data.status === "scanning") setRadar('scanning');
-        else if (data.status === "success") { 
-            processIncomingQRData(data.text, 'F8 全屏捕获'); 
-        }
-        else if (data.status === "duplicate") { 
-            setRadar('duplicate'); 
-            // 收到后端 F8 传来的重复数据，不发出 Beep 滴声，静默处理
-        }
-        else if (data.status === "not_found") { 
-            setRadar('not_found'); 
-        }
-        else { 
-            log(`❌ 后台异常: ${data.message}`, 'error'); 
-            setRadar('ready'); 
-        }
-    };
-    evtSource.onerror = function() {
-        console.warn('[诊断-SSE] SSE 连接异常或断开，浏览器将自动重连...');
-    };
 
     // ================== 本地图片文件导入解码通道（jsQR 驱动）==================
     function decodeLocalImage(file) {
@@ -988,7 +1597,7 @@
         for (let f of files) await handleLocalImage(f, f.name);
     });
 
-    // ================== 全自动天眼屏幕视频流监控 + 心跳看门狗 + 冻结帧自愈 ==================
+    // ================== 屏幕视频流扫描 + 心跳检测 + 冻结帧自愈 ==================
     let isScreenScanning = false;
     let screenStream = null;
     let lastScannedText = "";
@@ -1011,7 +1620,7 @@
     let watchdogTimer = setInterval(() => {
         if (isScreenScanning) {
             if (scanHeartbeat === lastWatchdogHeartbeat) {
-                log("🚨 检测到全自动天眼扫描卡死（WebRTC 视频轨道停滞或浏览器死锁）！激活看门狗重连...", "error");
+                log("🚨 检测到屏幕扫描停滞，正在尝试自动重连...", "error");
                 rebootScreenScan();
             }
             lastWatchdogHeartbeat = scanHeartbeat;
@@ -1048,9 +1657,9 @@
                 screenStream.getVideoTracks()[0].oninactive = stopScreenScan;
                 
                 scanLoop();
-                log("🟢 天眼重连成功！屏幕全自动监控通道已重新挂载运行。", "success");
+                log("🟢 屏幕扫描已重连。", "success");
             } catch (err) {
-                log(`❌ 天眼重连失败: ${err.message}。请尝试手动重新开启。`, "error");
+                log(`❌ 屏幕扫描重连失败: ${err.message}。请尝试手动重新开启。`, "error");
                 stopScreenScan();
             }
         }, 500);
@@ -1065,12 +1674,12 @@
     }
 
     async function startScreenScan() {
-        console.log('[诊断-天眼] 尝试启动天眼全自动监控...');
-        console.log('[诊断-天眼] jsQR 可用?', jsqrAvailable);
-        console.log('[诊断-天眼] navigator.mediaDevices 可用?', !!navigator.mediaDevices);
-        console.log('[诊断-天眼] getDisplayMedia 可用?', !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia));
+        console.log('[诊断-屏幕扫描] 尝试启动屏幕扫描...');
+        console.log('[诊断-屏幕扫描] jsQR 可用?', jsqrAvailable);
+        console.log('[诊断-屏幕扫描] navigator.mediaDevices 可用?', !!navigator.mediaDevices);
+        console.log('[诊断-屏幕扫描] getDisplayMedia 可用?', !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia));
         if (!jsqrAvailable) {
-            log('❌ 无法开启全自动监控：jsQR 解码引擎未成功加载。请检查 /static/jsqr-1.4.0.js 文件是否存在。', 'error');
+            log('❌ 无法开启屏幕扫描：jsQR 解码引擎未成功加载。请检查 /static/jsqr-1.4.0.js 文件是否存在。', 'error');
             return;
         }
         try {
@@ -1081,7 +1690,7 @@
             
             videoElement.srcObject = screenStream;
             videoContainer.style.display = "flex";
-            btnScreenScan.innerText = "⏹️ 停止全自动扫描";
+            btnScreenScan.innerText = "⏹️ 停止屏幕扫描";
             btnScreenScan.classList.add("active");
             isScreenScanning = true;
             isDecoding = false;
@@ -1092,7 +1701,7 @@
             lastFrameCurrentTime = -1;
             frozenFrameCount = 0;
             
-            log("📺 全自动屏幕监控扫描已开启！请拖动或开启发送端的全屏自动放映，使其处于录屏区域内。", "action");
+            log("📺 屏幕扫描已开启，请选择发送端窗口或屏幕区域。", "action");
 
             // 轨道结束双重保险：同时监听 onended 和 oninactive
             screenStream.getVideoTracks()[0].onended = stopScreenScan;
@@ -1113,17 +1722,17 @@
             screenStream = null;
         }
         videoContainer.style.display = "none";
-        btnScreenScan.innerText = "🎥 开启屏幕全自动监控";
+        btnScreenScan.innerText = "🎥 开启屏幕扫描";
         btnScreenScan.classList.remove("active");
         lastFrameFingerprint = -1;
         lastFrameCurrentTime = -1;
         frozenFrameCount = 0;
-        log("⏹️ 屏幕全自动监控扫描已停止。", "warn");
+        log("⏹️ 屏幕扫描已停止。", "warn");
     }
 
     async function scanLoop() {
         if (!isScreenScanning) {
-            console.log("[调试-通道B] 天眼监控已关闭，强行退出 scanLoop");
+            console.log("[调试-通道B] 屏幕扫描已关闭，强行退出 scanLoop");
             return;
         }
         if (isDecoding) {
@@ -1133,7 +1742,7 @@
         
         isDecoding = true;
         scanHeartbeat++;
-        const indicator = scanHeartbeat % 2 === 0 ? "🔴 天眼画面监控中..." : "⭕ 天眼画面监控中...";
+        const indicator = scanHeartbeat % 2 === 0 ? "扫描中 · 画面 A" : "扫描中 · 画面 B";
         document.getElementById('videoOverlay').innerText = indicator;
 
 
@@ -1166,7 +1775,7 @@
 
                 // ---- jsQR 解码（同步，直接读 Canvas 像素，无需 Promise/超时保护）----
                 if (!jsqrAvailable) {
-                    console.error('[调试-通道B] jsQR 未加载，终止天眼扫描。');
+                    console.error('[调试-通道B] jsQR 未加载，终止屏幕扫描。');
                     isDecoding = false;
                     stopScreenScan();
                     return;
@@ -1185,9 +1794,9 @@
                 if (decodedText) {
                     if (decodedText !== lastScannedText) {
                         lastScannedText = decodedText;
-                        processIncomingQRData(decodedText, '天眼全自动捕获');
+                        processIncomingQRData(decodedText, '屏幕扫描捕获');
                     }
-                    // 重复画面时不触发雷达闪烁，减少天眼运行时视觉噪声
+                    // 重复画面时不触发雷达闪烁，减少运行时视觉噪声
                 }
             } catch (e) {
                 console.error("[调试-通道B] scanLoop 内层异常:", e);

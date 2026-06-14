@@ -740,17 +740,491 @@
             user-select: none;
             backdrop-filter: blur(6px);
         }
+        /* ===== 接收端同款：清爽玻璃风格覆盖层（保持单 HTML 离线运行） ===== */
+        :root {
+            --bg: #07111f;
+            --panel: rgba(15, 23, 42, 0.82);
+            --card: rgba(30, 41, 59, 0.72);
+            --card-soft: rgba(15, 23, 42, 0.62);
+            --border: rgba(148, 163, 184, 0.18);
+            --border-strong: rgba(148, 163, 184, 0.30);
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --soft: #cbd5e1;
+            --blue: #38bdf8;
+            --green: #34d399;
+            --red: #fb7185;
+            --amber: #fbbf24;
+            --violet: #818cf8;
+        }
+
+        body {
+            min-height: 100vh;
+            padding: 32px 20px;
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 34rem),
+                radial-gradient(circle at top right, rgba(129, 140, 248, 0.20), transparent 30rem),
+                linear-gradient(135deg, #020617 0%, var(--bg) 52%, #0f172a 100%);
+        }
+
+        .container {
+            width: min(100%, 900px);
+            max-width: 900px;
+            padding: 28px;
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            background: var(--panel);
+            box-shadow: 0 24px 80px rgba(2, 6, 23, 0.62);
+            backdrop-filter: blur(18px);
+        }
+
+        .container:hover {
+            box-shadow: 0 24px 80px rgba(2, 6, 23, 0.62);
+        }
+
+        .app-hero {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+
+        .app-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            color: var(--blue);
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .app-title {
+            margin: 0;
+            color: var(--text);
+            font-size: clamp(28px, 4vw, 42px);
+            line-height: 1.08;
+            letter-spacing: -0.04em;
+        }
+
+        .app-subtitle {
+            max-width: 650px;
+            margin: 12px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            flex-shrink: 0;
+            padding: 10px 14px;
+            border: 1px solid rgba(52, 211, 153, 0.28);
+            border-radius: 999px;
+            background: rgba(16, 185, 129, 0.10);
+            color: #bbf7d0;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .status-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 14px rgba(52, 211, 153, 0.8);
+        }
+
+        .mode-selector {
+            gap: 4px;
+            margin-bottom: 18px;
+            padding: 5px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: rgba(2, 6, 23, 0.58);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+
+        .mode-btn {
+            padding: 12px 14px;
+            border-radius: 999px;
+            color: var(--muted);
+            font-weight: 850;
+        }
+
+        .mode-btn.active { color: white; }
+
+        .mode-slider {
+            top: 5px;
+            left: 5px;
+            width: calc(50% - 5px);
+            height: calc(100% - 10px);
+            border-radius: 999px;
+            background: linear-gradient(135deg, #0ea5e9, #6366f1);
+            box-shadow: 0 12px 24px rgba(37, 99, 235, 0.24);
+        }
+
+        .textarea-wrapper,
+        .file-zone-wrapper,
+        .advanced-panel,
+        .search-jump-bar {
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: var(--card-soft);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        .textarea-wrapper {
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .toolbar {
+            margin: 0;
+            padding: 12px 14px;
+            border: 0;
+            border-bottom: 1px solid var(--border);
+            border-radius: 0;
+            background: rgba(15, 23, 42, 0.58);
+        }
+
+        .toolbar-label {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .toolbar-btn,
+        .search-jump-btn {
+            padding: 8px 13px;
+            border: 1px solid var(--border-strong);
+            border-radius: 999px;
+            background: rgba(30, 41, 59, 0.74);
+            color: var(--soft);
+            font-weight: 800;
+        }
+
+        .toolbar-btn:hover,
+        .search-jump-btn:hover {
+            border-color: rgba(56, 189, 248, 0.46);
+            background: rgba(56, 189, 248, 0.12);
+            color: #bae6fd;
+            box-shadow: none;
+        }
+
+        .toolbar-btn.btn-danger:hover {
+            border-color: rgba(251, 113, 133, 0.44);
+            background: rgba(244, 63, 94, 0.14);
+            color: #fecdd3;
+            box-shadow: none;
+        }
+
+        textarea {
+            height: 250px;
+            padding: 18px;
+            border: 0;
+            border-radius: 0;
+            background: rgba(2, 6, 23, 0.78);
+            color: #7dd3fc;
+            font-size: 14px;
+        }
+
+        textarea:focus {
+            border-color: transparent;
+            box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.34), 0 0 0 4px rgba(56, 189, 248, 0.08);
+        }
+
+        textarea::placeholder { color: #64748b; }
+
+        .file-zone-wrapper {
+            display: none;
+            padding: 14px;
+            margin-bottom: 16px;
+        }
+
+        .file-zone {
+            min-height: 220px;
+            padding: 28px;
+            border: 1px dashed rgba(56, 189, 248, 0.48);
+            border-radius: 22px;
+            background: rgba(14, 165, 233, 0.07);
+        }
+
+        .file-zone:hover {
+            border-color: var(--blue);
+            background: rgba(14, 165, 233, 0.12);
+            box-shadow: none;
+            transform: translateY(-1px);
+        }
+
+        .file-zone.dragover {
+            border-color: rgba(52, 211, 153, 0.70);
+            background: rgba(52, 211, 153, 0.10);
+            box-shadow: 0 0 24px rgba(52, 211, 153, 0.14);
+        }
+
+        .file-icon {
+            display: grid;
+            place-items: center;
+            width: 58px;
+            height: 58px;
+            margin: 0 auto 14px;
+            border-radius: 18px;
+            background: rgba(56, 189, 248, 0.12);
+            font-size: 30px;
+            animation: none;
+            filter: none;
+        }
+
+        .file-zone-title {
+            margin-bottom: 8px;
+            color: #bae6fd;
+            font-size: 15px;
+            font-weight: 850;
+        }
+
+        .file-zone-subtitle {
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 650;
+        }
+
+        .file-card {
+            margin-top: 14px;
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: rgba(2, 6, 23, 0.55);
+            box-shadow: none;
+        }
+
+        .file-badge {
+            border-radius: 999px;
+            background: linear-gradient(135deg, var(--violet), #6366f1);
+        }
+
+        .file-name { color: var(--text); }
+        .file-size { color: var(--muted); }
+
+        .advanced-panel {
+            margin: 0 0 18px;
+            padding: 16px;
+        }
+
+        .advanced-title {
+            color: var(--muted);
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .slider-wrapper input[type="range"] {
+            accent-color: var(--blue);
+        }
+
+        .slider-val {
+            color: #7dd3fc;
+            min-width: 62px;
+        }
+
+        .action-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 12px;
+        }
+
+        .main-btn {
+            padding: 14px 18px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #0ea5e9, #2563eb);
+            box-shadow: 0 14px 28px rgba(37, 99, 235, 0.24);
+            font-size: 15px;
+            font-weight: 850;
+        }
+
+        .main-btn:hover {
+            background: linear-gradient(135deg, #0284c7, #4f46e5);
+            transform: translateY(-1px);
+            box-shadow: 0 16px 32px rgba(37, 99, 235, 0.28);
+        }
+
+        #btnSlideshow {
+            display: none;
+            background: linear-gradient(135deg, #10b981, #059669);
+            box-shadow: 0 14px 28px rgba(16, 185, 129, 0.24);
+        }
+
+        .status {
+            margin-top: 14px;
+            padding: 12px 14px;
+            min-height: 44px;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: rgba(2, 6, 23, 0.42);
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .search-jump-bar {
+            display: none;
+            margin-top: 16px;
+            padding: 12px 14px;
+            justify-content: center;
+        }
+
+        .search-jump-bar label {
+            color: var(--soft);
+            font-weight: 800;
+        }
+
+        .search-jump-bar input[type="number"] {
+            border: 1px solid var(--border-strong);
+            border-radius: 999px;
+            background: rgba(2, 6, 23, 0.72);
+            color: var(--text);
+        }
+
+        .search-jump-total { color: var(--muted); }
+
+        #qrcode {
+            margin-top: 24px;
+            gap: 18px;
+        }
+
+        .qr-card {
+            padding: 22px;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.78), rgba(15, 23, 42, 0.70));
+            box-shadow: 0 18px 42px rgba(2, 6, 23, 0.30);
+        }
+
+        .qr-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(56, 189, 248, 0.36);
+            box-shadow: 0 20px 44px rgba(2, 6, 23, 0.38);
+        }
+
+        .qr-card-title {
+            color: var(--soft);
+            font-size: 15px;
+        }
+
+        .qr-image-wrapper {
+            padding: 14px;
+            border-radius: 18px;
+            box-shadow: 0 16px 34px rgba(2, 6, 23, 0.25);
+        }
+
+        .qr-card-tip {
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
+        .back-to-top {
+            border: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.78);
+        }
+
+        .back-to-top:hover {
+            background: #2563eb;
+            border-color: rgba(56, 189, 248, 0.42);
+        }
+
+        .playback-overlay {
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.20), transparent 34rem),
+                rgba(2, 6, 23, 0.94);
+        }
+
+        .playback-title {
+            color: #e0f2fe;
+            background: none;
+            -webkit-text-fill-color: initial;
+        }
+
+        .playback-card {
+            border: 1px solid rgba(56, 189, 248, 0.30);
+            border-radius: 28px;
+            box-shadow: 0 30px 80px rgba(2, 6, 23, 0.55);
+        }
+
+        .playback-control-bar {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(18px);
+        }
+
+        .playback-btn {
+            border-radius: 999px;
+            background: rgba(30, 41, 59, 0.86);
+        }
+
+        .playback-btn:hover {
+            background: rgba(56, 189, 248, 0.18);
+        }
+
+        .playback-shortcuts-hint {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.72);
+        }
+
+        .shortcut-tag {
+            border-radius: 999px;
+            background: rgba(30, 41, 59, 0.86);
+        }
+
+        @media (max-width: 760px) {
+            body { padding: 18px 12px; }
+            .container { padding: 20px; border-radius: 22px; }
+            .app-hero { flex-direction: column; }
+            .status-pill { align-self: flex-start; }
+            .toolbar { flex-wrap: wrap; }
+            .toolbar-label { width: 100%; }
+            .search-jump-bar { align-items: stretch; }
+            .playback-header {
+                top: 18px;
+                left: 18px;
+                right: 18px;
+            }
+            .playback-shortcuts-hint { display: none; }
+            .playback-control-bar {
+                left: 12px;
+                right: 12px;
+                width: auto;
+                border-radius: 22px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>内网数据传输工具 - 发送端</h2>
+    <header class="app-hero">
+        <div>
+            <div class="app-kicker">📤 发送端</div>
+            <h1 class="app-title">内网数据传输工具</h1>
+            <p class="app-subtitle">输入文本或投递文件，自动压缩、分片并生成二维码序列；接收端扫描后即可还原。</p>
+        </div>
+        <div class="status-pill">
+            <span class="status-dot"></span>
+            单文件离线运行
+        </div>
+    </header>
     
     <!-- 模式切换器 -->
     <div class="mode-selector">
-        <div class="mode-btn active" id="btnModeText" onclick="switchMode('text')">📝 文本传输模式</div>
-        <div class="mode-btn" id="btnModeFile" onclick="switchMode('file')">📁 文件传输模式</div>
+        <div class="mode-btn active" id="btnModeText" onclick="switchMode('text')">📝 文本</div>
+        <div class="mode-btn" id="btnModeFile" onclick="switchMode('file')">📁 文件</div>
         <div class="mode-slider" id="modeSlider"></div>
     </div>
     
@@ -758,27 +1232,23 @@
     <div id="textModeArea" class="textarea-wrapper">
         <!-- 工具栏：粘贴 / 清空 -->
         <div class="toolbar">
-            <span class="toolbar-label">输入区操作</span>
+            <span class="toolbar-label">文本输入</span>
             <button class="toolbar-btn" onclick="pasteText()">
-                📋 一键粘贴
+                📋 粘贴
             </button>
             <button class="toolbar-btn btn-danger" onclick="clearText()">
-                🗑️ 一键清空
+                🗑️ 清空
             </button>
         </div>
-        <textarea id="inputText" placeholder="请在此输入或粘贴需要传输的文本数据、配置文件或源码..."></textarea>
+        <textarea id="inputText" placeholder="在这里输入或粘贴要传输的文本、配置文件或源码..."></textarea>
     </div>
     
     <!-- 文件传输区域 (默认隐藏) -->
     <div id="fileModeArea" class="file-zone-wrapper">
         <div class="file-zone" id="fileDropZone" onclick="triggerFileSelect()">
             <div class="file-icon">📁</div>
-            <div style="font-size: 15px; font-weight: 700; color: #93c5fd; margin-bottom: 8px;">
-                将文件拖拽至此舱室，或点击浏览本地文件
-            </div>
-            <div style="font-size: 13px; color: #64748b; font-weight: 600;">
-                支持任何格式，推荐单文件 &lt; 5MB
-            </div>
+            <div class="file-zone-title">拖拽文件到这里，或点击选择</div>
+            <div class="file-zone-subtitle">支持任意格式；文件越大，二维码分片越多。</div>
             <input type="file" id="fileSelectInput" onchange="handleFileSelect(event)">
         </div>
         <!-- 已选择文件展示卡片 -->
@@ -788,7 +1258,7 @@
     <!-- 高级调节滑块面板 -->
     <div class="advanced-panel">
         <div class="advanced-title">
-            <span>⚙️ 二维码单块最大容量 (决定分片总数)</span>
+            <span>⚙️ 单个二维码容量</span>
             <span class="slider-val" id="optimalSizeVal">400 字符</span>
         </div>
         <div class="slider-wrapper">
@@ -796,16 +1266,18 @@
         </div>
     </div>
     
-    <button class="main-btn" onclick="generateQR()">✨ 生成分块二维码序列</button>
-    <button class="main-btn" id="btnSlideshow" onclick="startSlideshow()" style="margin-top: 12px; background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35); display: none;">🖥️ 进入极速全屏轮播放映大厅</button>
+    <div class="action-row">
+        <button class="main-btn" onclick="generateQR()">✨ 生成二维码序列</button>
+        <button class="main-btn" id="btnSlideshow" onclick="startSlideshow()">🖥️ 全屏轮播</button>
+    </div>
     <div id="status" class="status">等待输入数据...</div>
     
     <!-- 全域搜索跳转栏：生成二维码后显示，快速定位到指定分片 -->
     <div id="searchJumpBar" class="search-jump-bar">
-        <label for="jumpInput">🔍 跳转到分片:</label>
+        <label for="jumpInput">🔍 分片</label>
         <input type="number" id="jumpInput" min="1" placeholder="编号" onkeydown="if(event.key==='Enter')jumpToCard()">
         <span id="jumpTotal" class="search-jump-total">/ 0</span>
-        <button class="search-jump-btn" onclick="jumpToCard()">⏎ 跳转</button>
+        <button class="search-jump-btn" onclick="jumpToCard()">跳转</button>
     </div>
     
     <div id="qrcode"></div>
@@ -815,7 +1287,7 @@
 <div id="playbackOverlay" class="playback-overlay">
     <!-- 头部：标题与倒计时环 -->
     <div class="playback-header">
-        <div class="playback-title">🌌 极速全屏轮播放映大厅</div>
+        <div class="playback-title">🖥️ 全屏轮播</div>
         <div class="playback-progress-box">
             <svg class="progress-ring" width="64" height="64">
                 <circle class="progress-ring__circle" stroke="#38bdf8" stroke-width="4" fill="transparent" r="30" cx="32" cy="32"/>
@@ -906,7 +1378,7 @@ function stringHash(str) {
 // =========================================================================
 let currentMode = 'text'; // 'text' 或 'file'
 let selectedFile = null;
-let optimalSize = 200;
+let optimalSize = 400;
 
 function switchMode(mode) {
     if (mode === currentMode) return;
@@ -938,7 +1410,7 @@ function switchMode(mode) {
         fileArea.style.display = "block";
         if (selectedFile) {
             const formattedSize = formatBytes(selectedFile.size);
-            statusEl.innerText = `📂 已选定文件: ${selectedFile.name} (${formattedSize})。准备就绪。`;
+            statusEl.innerText = `📂 已选择文件：${selectedFile.name}（${formattedSize}），可以生成二维码。`;
             statusEl.style.color = "#60a5fa";
         }
     }
@@ -983,7 +1455,7 @@ function handleFile(file) {
     card.style.display = "block";
     
     const statusEl = document.getElementById("status");
-    statusEl.innerText = `📂 已成功选定文件: ${file.name} (${formattedSize})。已准备就绪，可以生成分块。`;
+    statusEl.innerText = `📂 已选择文件：${file.name}（${formattedSize}），可以生成二维码。`;
     statusEl.style.color = "#34d399";
 }
 
@@ -1058,7 +1530,7 @@ async function pasteText() {
         const text = await navigator.clipboard.readText();
         if (text) {
             document.getElementById("inputText").value = text;
-            statusEl.innerText = "📋 已成功从剪贴板粘贴文本！";
+            statusEl.innerText = "📋 已粘贴剪贴板文本。";
             statusEl.style.color = "#34d399";
         } else {
             statusEl.innerText = "⚠️ 剪贴板中未发现文本数据。";
@@ -1074,7 +1546,7 @@ function clearText() {
     document.getElementById("inputText").value = "";
     document.getElementById("qrcode").innerHTML = "";
     var statusEl = document.getElementById("status");
-    statusEl.innerText = "🗑️ 数据已清空。";
+        statusEl.innerText = "🗑️ 文本和二维码已清空。";
     statusEl.style.color = "#94a3b8";
 }
 
@@ -1091,7 +1563,7 @@ function generateQR() {
             return;
         }
         
-        statusEl.innerText = "⏳ 正在分析长文本数据，构建分块序列...";
+        statusEl.innerText = "⏳ 正在分析文本并生成分片...";
         statusEl.style.color = "#60a5fa";
         
         try {
@@ -1122,7 +1594,7 @@ function generateQR() {
             const compInfo = useCompression
                 ? `压缩率 ${compRatio}%，${chunks.length} 片`
                 : `内容较短，未压缩，${chunks.length} 片`;
-            statusEl.innerText = `⏳ 分片完成（${compInfo}），渲染 QR 码中...`;
+            statusEl.innerText = `⏳ 分片完成（${compInfo}），正在渲染二维码...`;
             
             renderQRSequence(chunks, textId, null, useCompression);
         } catch (err) {
@@ -1137,7 +1609,7 @@ function generateQR() {
             return;
         }
         
-        statusEl.innerText = "⏳ 正在读取文件并进行智能编码中...";
+        statusEl.innerText = "⏳ 正在读取文件并生成分片...";
         statusEl.style.color = "#60a5fa";
         
         const reader = new FileReader();
@@ -1170,7 +1642,7 @@ function generateQR() {
                 const compType = useCompression
                     ? `已压缩 ${compRatio}%，${chunks.length} 片`
                     : `已压缩格式，原始传输，${chunks.length} 片`;
-                statusEl.innerText = `⏳ 分片完成（${compType}），渲染 QR 码中...`;
+                statusEl.innerText = `⏳ 分片完成（${compType}），正在渲染二维码...`;
                 
                 renderQRSequence(chunks, textId, selectedFile.name, useCompression);
             } catch (err) {
@@ -1218,8 +1690,8 @@ function renderQRSequence(chunks, textId, filename, useCompression = false) {
         
         const title = document.createElement("h3");
         title.className = "qr-card-title";
-        const typeLabel = filename ? "📁 文件" : "📦 文本";
-        title.innerText = `${typeLabel}第 ${chunkIndex} 部分 / 共 ${totalChunks} 部分 (任务 ID: ${textId})`;
+        const typeLabel = filename ? "📁 文件" : "📝 文本";
+        title.innerText = `${typeLabel}分片 ${chunkIndex} / ${totalChunks}`;
         card.appendChild(title);
         
         const imgWrapper = document.createElement("div");
@@ -1230,10 +1702,10 @@ function renderQRSequence(chunks, textId, filename, useCompression = false) {
         tip.className = "qr-card-tip";
         
         if (filename) {
-            tip.innerText = `分片编码长度: ${base64Data.length} 字符 | 目标文件名: ${filename}`;
+            tip.innerText = `编码长度：${base64Data.length} 字符 · 文件名：${filename}`;
         } else {
             const estimatedCharLen = Math.round(base64Data.length * 0.75);
-            tip.innerText = `分片编码长度: ${base64Data.length} 字符 (约 ${estimatedCharLen} 原始字符)`;
+            tip.innerText = `编码长度：${base64Data.length} 字符 · 约 ${estimatedCharLen} 原始字符`;
         }
         card.appendChild(tip);
         qrContainer.appendChild(card);
@@ -1250,7 +1722,7 @@ function renderQRSequence(chunks, textId, filename, useCompression = false) {
     
     const sizeLabel = filename ? formatBytes(selectedFile.size) : `${document.getElementById("inputText").value.length} 字符`;
     const compLabel = useCompression ? " 📦已压缩" : "";
-    statusEl.innerText = `🎉 渲染成功！总计 ${sizeLabel}${compLabel}，切分为 ${totalChunks} 个分块二维码。请逐一扫描。`;
+    statusEl.innerText = `🎉 已生成 ${totalChunks} 个二维码 · 总计 ${sizeLabel}${compLabel}。可逐张扫描，或进入全屏轮播。`;
     statusEl.style.color = "#34d399";
     
     // 显示搜索跳转栏并更新总数
@@ -1289,6 +1761,7 @@ function scrollToTop() {
 let slideshowChunks = [];
 let slideshowTextId = "";
 let slideshowFilename = "";
+let slideshowCompressed = false;
 let currentSlideIndex = 0;
 let slideshowIntervalId = null;
 let countdownIntervalId = null;
@@ -1299,13 +1772,14 @@ const countdownStep = 50; // 每 50ms 刷新一次倒计时
 
 // 升级 renderQRSequence 逻辑以保存分片并显示放映按钮
 const originalRenderQRSequence = renderQRSequence;
-renderQRSequence = function(chunks, textId, filename) {
-    originalRenderQRSequence(chunks, textId, filename);
+renderQRSequence = function(chunks, textId, filename, useCompression = false) {
+    originalRenderQRSequence(chunks, textId, filename, useCompression);
     
     // 缓存分片，以供幻灯片轮播调用
     slideshowChunks = chunks;
     slideshowTextId = textId;
     slideshowFilename = filename;
+    slideshowCompressed = useCompression;
     currentSlideIndex = 0;
     
     // 展现幻灯片放映大厅入口按钮
@@ -1326,6 +1800,7 @@ switchMode = function(mode) {
     slideshowChunks = [];
     slideshowTextId = "";
     slideshowFilename = "";
+    slideshowCompressed = false;
 };
 
 // 开启放映
@@ -1411,9 +1886,10 @@ function updateSlide() {
     
     // 拼接分块协议头
     const base64Filename = slideshowFilename ? window.btoa(unescape(encodeURIComponent(slideshowFilename))) : "";
-    const protocolPayload = slideshowFilename 
-        ? `[CHUNK:${index}|TOTAL:${total}|HASH:${slideshowTextId}|FILE:${base64Filename}]${base64Data}`
-        : `[CHUNK:${index}|TOTAL:${total}|HASH:${slideshowTextId}]${base64Data}`;
+    const compressionFlag = slideshowCompressed ? "|COMP:1" : "";
+    const protocolPayload = slideshowFilename
+        ? `[CHUNK:${index}|TOTAL:${total}|HASH:${slideshowTextId}|FILE:${base64Filename}${compressionFlag}]${base64Data}`
+        : `[CHUNK:${index}|TOTAL:${total}|HASH:${slideshowTextId}${compressionFlag}]${base64Data}`;
         
     // 清空并重新生成二维码
     const qrWrapper = document.getElementById("playbackQr");
@@ -1429,7 +1905,7 @@ function updateSlide() {
     });
     
     // 更新大厅状态文本（含完成百分比，给扫描者直观的进度感知）
-    const typeLabel = slideshowFilename ? "📁 文件" : "📦 文本";
+    const typeLabel = slideshowFilename ? "📁 文件" : "📝 文本";
     const percent = Math.round((index / total) * 100);
     document.getElementById("playbackInfo").innerText = `${typeLabel}第 ${index} / ${total} 部分 · ${percent}%`;
     

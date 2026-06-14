@@ -564,15 +564,19 @@
                         console.error('[接收端] 文本解码/解压失败:', e);
                     }
                 } else {
-                    // 未集齐：显示已收到分片的预览（直接 base64 解码显示，供参考）
+                    // 未集齐：显示已收到分片的预览
                     for (let i = 1; i <= totalChunks; i++) {
                         if (puzzleChunks[i] !== undefined) {
-                            try {
-                                const bStr = window.atob(puzzleChunks[i]);
-                                const bArr = new Uint8Array(bStr.length);
-                                for (let j = 0; j < bStr.length; j++) bArr[j] = bStr.charCodeAt(j);
-                                fullText += new TextDecoder('utf-8', {fatal: false}).decode(bArr);
-                            } catch(e) { fullText += puzzleChunks[i]; }
+                            if (currentTaskCompressed) {
+                                fullText += `[📦 第 ${i} 部分：压缩数据块已安全接收，待集齐后解压预览...]\n`;
+                            } else {
+                                try {
+                                    const bStr = window.atob(puzzleChunks[i]);
+                                    const bArr = new Uint8Array(bStr.length);
+                                    for (let j = 0; j < bStr.length; j++) bArr[j] = bStr.charCodeAt(j);
+                                    fullText += new TextDecoder('utf-8', {fatal: false}).decode(bArr);
+                                } catch(e) { fullText += puzzleChunks[i]; }
+                            }
                         } else {
                             fullText += `[--- ⏳ 等待捕获第 ${i} 部分分片 ---]\n`;
                         }
